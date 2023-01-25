@@ -30,10 +30,10 @@
         src = craneLib.cleanCargoSource ./.;
 
         buildInputs = [
-          pkgs.pkg-config
-          pkgs.openssl
+          # pkgs.pkg-config
+          # pkgs.openssl
         ] ++ lib.optionals pkgs.stdenv.isDarwin [
-          pkgs.darwin.apple_sdk.frameworks.Security
+          # pkgs.darwin.apple_sdk.frameworks.Security
           pkgs.libiconv
         ];
 
