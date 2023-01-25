@@ -1,8 +1,9 @@
 use anyhow::Result;
-use bincode2::{deserialize, serialize};
+use bincode2::{deserialize, deserialize_from, serialize};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -28,28 +29,70 @@ impl Package {
     }
 }
 
-pub fn read<P: AsRef<Path>>(path: &P) -> Result<Config> {
-    let cfg_bytes = std::fs::read(path)?;
-    let config = serde_json::from_slice(&cfg_bytes)?;
-    let hash = hash_file(path)?;
-    let filename = format!("{}.bin", hash);
-    let file_path = Path::new(&filename);
-    serialize_to_file(&config, &file_path)?;
-    Ok(config)
+pub fn read<P: AsRef<Path> + Copy>(path: &P) -> Result<(usize, Config)> {
+    let json_bytes = fs::read(path)?;
+    let json_hash = hash_json(&json_bytes)?;
+    let index_path = Path::new("index.bin");
+    let bincode_path = format!("{}.bin", json_hash);
+    let (generation, config) = if let Ok(bincode_metadata) = fs::metadata(&bincode_path) {
+        let index_data: HashMap<String, usize> = deserialize_from(fs::File::open(index_path)?)?;
+        if let Some(gen) = index_data.get(&json_hash) {
+            println!(
+                "Loading bincode for generation {} for hash {}",
+                gen, json_hash
+            );
+            let config = deserialize(&fs::read(&bincode_path)?)?;
+            (*gen, config)
+        } else {
+            let new_gen = index_data.len();
+            println!(
+                "Creating new bincode for generation {} for hash {}",
+                new_gen, json_hash
+            );
+            let config = serde_json::from_slice(&json_bytes)?;
+            write_to_index(index_path, json_hash.clone(), new_gen)?;
+            serialize_to_file(&config, &bincode_path)?;
+            (new_gen, config)
+        }
+    } else {
+        println!(
+            "Creating new bincode for generation 0 for hash {}",
+            json_hash
+        );
+        let index_data: HashMap<String, usize> = HashMap::new();
+        let config = serde_json::from_slice(&json_bytes)?;
+        write_to_index(index_path, json_hash.clone(), 0)?;
+        serialize_to_file(&config, &bincode_path)?;
+        (0, config)
+    };
+    Ok((generation, config))
 }
 
-fn hash_file<P: AsRef<Path>>(path: P) -> Result<String> {
-    let mut file = std::fs::File::open(path)?;
+fn hash_json(json: &[u8]) -> Result<String> {
     let mut hasher = Sha256::new();
-    std::io::copy(&mut file, &mut hasher)?;
+    hasher.update(json);
+
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn serialize_to_file<P: AsRef<Path>>(config: &Config, file_path: P) -> Result<()> {
-    let encoded: Vec<u8> = serialize(config)?;
-    std::fs::write(file_path, encoded)?;
+fn write_to_index<P: AsRef<Path> + Copy>(
+    index_path: P,
+    hash: String,
+    generation: usize,
+) -> Result<()> {
+    let index_data = match fs::metadata(index_path) {
+        Ok(_) => deserialize_from(fs::File::open(index_path)?)?,
+        Err(_) => HashMap::new(),
+    };
+    let mut index_data = index_data;
+    index_data.insert(hash, generation);
+    let encoded = serialize(&index_data)?;
+    fs::write(index_path, encoded)?;
     Ok(())
 }
 
-// create "generation" using bincode2
-// store generation index?
+fn serialize_to_file<P: AsRef<Path>>(config: &Config, file_path: P) -> Result<()> {
+    let encoded = serialize(config)?;
+    fs::write(file_path, encoded)?;
+    Ok(())
+}
