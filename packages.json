@@ -2,7 +2,17 @@
   "packages": {
     "shaunsingh/nyoom.nvim": {
       "opt": true,
-      "branch": "master"
+      "branch": "master",
+      "dependencies": {
+        "shaunsingh/repo2.nvim": {
+          "branch": "master",
+          "build": "make all"
+        },
+        "shaunsingh/repo3.nvim": {
+          "opt": true,
+          "commit": "e331b56"
+        }
+      }
     },
     "shaunsingh/repo4.nvim": {
       "opt": true,

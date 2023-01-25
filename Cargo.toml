@@ -10,10 +10,12 @@ keywords = ["vim", "neovim", "package", "plugin", "manager"]
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
+error-stack = "0.2.4"
 bincode2 = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 termcolor = "1.2"
-
+git2 = "0.16.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"

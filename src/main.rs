@@ -1,21 +1,15 @@
-#![warn(
-    clippy::all,
-    clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
+//! WIP impl of alpacka
 
-use anyhow::Context;
-use std::{collections::HashMap, io::Write, path::Path, sync::mpsc};
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-mod git;
-mod loader;
-mod semver;
+use std::{
+    fmt::{Display, Formatter},
+    path::Path,
+};
 
-#[macro_use]
-extern crate serde;
+use alpacka::loader;
+use error_stack::{Context, ResultExt};
+use tracing::debug;
 
 #[derive(Debug)]
 pub enum Message {
@@ -47,7 +41,6 @@ pub enum StateEventKind {
     Updated,
     UpToDate,
     Removed,
-    Failed(anyhow::Error),
 }
 
 impl std::fmt::Display for StateEventKind {
@@ -56,29 +49,42 @@ impl std::fmt::Display for StateEventKind {
             f,
             "{}",
             match &self {
-                Self::Installing => "  Installing".to_string(),
-                Self::Installed => "   Installed".to_string(),
-                Self::Updating => "    Updating".to_string(),
-                Self::Updated => "     Updated".to_string(),
-                Self::UpToDate => "  Up to date".to_string(),
-                Self::Removed => "     Removed".to_string(),
-                Self::Failed(e) => format!("Error occured: {:?}", e),
+                Self::Installing => "Installing",
+                Self::Installed => "Installed",
+                Self::Updating => "Updating",
+                Self::Updated => "Updated",
+                Self::UpToDate => "Up to date",
+                Self::Removed => "Removed",
             }
         )
     }
 }
 
-fn main() -> anyhow::Result<()> {
+#[derive(Debug)]
+struct MainError;
+
+impl Display for MainError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Failed to run alpacka!")
+    }
+}
+
+impl Context for MainError {}
+
+fn main() {
+    tracing_subscriber::fmt::init();
+
     // let config_dir = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| "~/.config/".into());
     // let config_path = Path::new(&config_dir).join("nvim/packages.json");
     // println!("config-dir {}", config_dir);
     // println!("config-path {}", config_path.display());
     let config_path = "packages.json";
-    println!("config-path {}", config_path);
-    let config = loader::read(&config_path).context("failed to read config file")?;
+    debug!("config-path {}", config_path);
+    let config = loader::read(&config_path).change_context(MainError);
+    debug!("config {:#?}", config);
 
-    // let data_dir = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| "~/.local/share/".into());
-    // let data_path = Path::new(&data_dir).join("nvim/site/pack/nyoom");
+    let data_dir = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| "~/.local/share/".into());
+    let data_path = Path::new(&data_dir).join("nvim/site/pack");
     // Pretty print installing packages
     // Get list of already installed packages
     // Parse packages file & create generation
@@ -87,5 +93,4 @@ fn main() -> anyhow::Result<()> {
     // Install packages that need installing
     // Update packages that need updating
     // Remove packages that need removing
-    Ok(())
 }
