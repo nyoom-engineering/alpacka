@@ -1,2 +1,2 @@
 # alpacka
-Neovim package manager
+Rust-powered Neovim package manager 
