@@ -1,6 +1,6 @@
 //! Git related functions for alpacka
 
-use std::{fmt::Display, fs::create_dir_all, path::Path};
+use std::{fmt::Display, path::PathBuf};
 
 use crate::loader::Package;
 use error_stack::{bail, Context, IntoReport, Result, ResultExt};
@@ -25,28 +25,14 @@ impl Display for CloneError {
 impl Context for CloneError {}
 
 /// clones or updates a package
-pub fn update_package(name: String, package: Package, data_path: &Path) -> Result<(), CloneError> {
-    let mut data_path = data_path.to_path_buf();
-    if package.opt.unwrap_or(false) {
-        data_path.push("opt");
-    }
-
-    let remote_path = name;
-    let package_dirname = package.get_package_dirname(&remote_path);
-    let package_path = data_path.join(package_dirname);
-
-    if !package_path.exists() {
-        create_dir_all(&data_path)
-            .into_report()
-            .attach_printable_lazy(|| {
-                format!("Failed to create directory at {}", data_path.display())
-            })
-            .change_context(CloneError::GitError)?;
-    }
-
-    let tag = package.ver.map(|v| format!("refs/tags/{}", v));
-    let branch = package.branch.map(|v| format!("refs/heads/{}", v));
-    let commit = package.commit;
+pub fn update_package(
+    package: &Package,
+    remote_path: &String,
+    package_path: &PathBuf,
+) -> Result<(), CloneError> {
+    let tag = package.ver.as_ref().map(|v| format!("refs/tags/{}", v));
+    let branch = package.branch.as_ref().map(|v| format!("refs/heads/{}", v));
+    let commit = &package.commit;
 
     // make sure only one of these is set
     if (tag.is_some() && branch.is_some())
@@ -78,7 +64,7 @@ pub fn update_package(name: String, package: Package, data_path: &Path) -> Resul
             true
         });
 
-        let repo = git2::Repository::open(&package_path)
+        let repo = git2::Repository::open(package_path)
             .into_report()
             .attach_printable_lazy(|| format!("Failed to open repo at {}", package_path.display()))
             .change_context(CloneError::GitError)?;
@@ -97,13 +83,14 @@ pub fn update_package(name: String, package: Package, data_path: &Path) -> Resul
         info!("Updating {}", package_path.display());
 
         let refspecs = if let Some(tag) = tag {
-            format!("{}:{}", tag, tag)
+            tag
         } else if let Some(branch) = branch {
-            format!("{}:{}", branch, branch)
-        } else if let Some(commit) = commit {
-            format!("{}:{}", commit, commit)
+            branch
         } else {
-            "".to_string()
+            match commit {
+                Some(commit) => commit.to_string(),
+                None => "HEAD".to_string(),
+            }
         };
 
         remote
@@ -114,8 +101,21 @@ pub fn update_package(name: String, package: Package, data_path: &Path) -> Resul
             })
             .change_context(CloneError::GitError)?;
 
+        let good_ref = if refspecs == "HEAD" {
+            let head = repo
+                .head()
+                .into_report()
+                .attach_printable_lazy(|| {
+                    format!("Failed to get HEAD at {}", package_path.display())
+                })
+                .change_context(CloneError::GitError)?;
+            head.name().unwrap().to_string()
+        } else {
+            refspecs
+        };
+
         let mut reference = repo
-            .find_reference("FETCH_HEAD")
+            .find_reference(&good_ref)
             .into_report()
             .attach_printable_lazy(|| {
                 format!("Failed to find reference at {}", package_path.display())
@@ -166,7 +166,7 @@ pub fn update_package(name: String, package: Package, data_path: &Path) -> Resul
             })
             .change_context(CloneError::GitError)?;
     } else {
-        Repository::clone_recurse(&remote_path, &package_path)
+        Repository::clone_recurse(remote_path, package_path)
             .into_report()
             .attach_printable_lazy(|| format!("Failed to clone {}", remote_path))
             .change_context(CloneError::GitError)?;

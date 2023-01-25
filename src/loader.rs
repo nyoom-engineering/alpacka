@@ -1,20 +1,33 @@
 //! parses a json file and creates a bincode file for it
 
 use bincode2::{deserialize, deserialize_from, serialize};
-use error_stack::{Context, IntoReport, Result, ResultExt};
+use error_stack::{bail, Context, IntoReport, Result, ResultExt};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::fs;
+use std::fs::{self, create_dir_all};
 use std::path::Path;
-use tracing::info;
+use std::process::{Command, Stdio};
+use tracing::{debug, info};
+
+use crate::git::update_package;
 
 #[derive(Debug, Deserialize, Serialize)]
 /// The alpacka config format
 pub struct Config {
     /// All the packages
     pub packages: HashMap<String, Package>,
+}
+
+impl Config {
+    pub fn install_all_packages(&self, data_path: &Path) -> Result<(), InstallPackageError> {
+        for (name, package) in self.packages.iter() {
+            package.install_plugin(name, data_path)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -36,15 +49,112 @@ pub struct Package {
     pub dependencies: Option<HashMap<String, Package>>,
 }
 
+#[derive(Debug)]
+pub enum InstallPackageError {
+    InvalidLocator,
+    PackageError,
+    IoError,
+}
+
+impl Display for InstallPackageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidLocator => f.write_str(
+                "Invalid locator. Valid options are currently: github, gitlab, and https",
+            ),
+            Self::IoError => f.write_str("IO Error"),
+            Self::PackageError => f.write_str("Package Installation Error"),
+        }
+    }
+}
+
+impl Context for InstallPackageError {}
+
 impl Package {
     /// Get the package directory name
-    pub fn get_package_dirname(&self, remote_path: &str) -> String {
-        let remote_path_name = remote_path.split('/').last().unwrap().to_string();
-        self.rename.clone().unwrap_or(remote_path_name)
+    pub fn get_repo_name(&self, remote_path: &str) -> String {
+        if let Some(renamed) = &self.rename {
+            return renamed.to_owned();
+        }
+
+        let mut package_dirname = remote_path
+            .split('/')
+            .last()
+            .unwrap_or_else(|| panic!("Invalid remote path: {}", remote_path))
+            .to_owned();
+        // remove the .git extension
+        if package_dirname.ends_with(".git") {
+            package_dirname.truncate(package_dirname.len() - 4);
+        }
+        package_dirname
     }
 
-    pub fn install_plugin(&self, data_path: &Path) {
-        todo!()
+    pub fn install_plugin(
+        &self,
+        name: &String,
+        data_path: &Path,
+    ) -> Result<(), InstallPackageError> {
+        if let Some(dependencies) = &self.dependencies {
+            for (dep_name, dep) in dependencies {
+                dep.install_plugin(dep_name, data_path)?;
+            }
+        }
+
+        let remote_path = match name.split_once(':') {
+            None => name.to_owned(),
+            Some(("github", path)) => format!("https://github.com/{}.git", path),
+            Some(("gitlab", path)) => format!("https://gitlab.com/{}.git", path),
+            Some(("https", path)) => format!("https:{}", path),
+            Some((_, _)) => bail!(InstallPackageError::InvalidLocator),
+        };
+
+        let mut data_path = data_path.to_path_buf();
+        debug!("data_path {}", data_path.display());
+
+        if self.opt.unwrap_or(false) {
+            data_path.push("opt");
+        }
+
+        let repo = self.get_repo_name(&remote_path);
+        let package_path = data_path.join(repo);
+
+        if !data_path.exists() {
+            create_dir_all(&data_path)
+                .into_report()
+                .attach_printable_lazy(|| {
+                    format!("Failed to create directory at {}", data_path.display())
+                })
+                .change_context(InstallPackageError::IoError)?;
+        }
+
+        update_package(self, &remote_path, &package_path)
+            .change_context(InstallPackageError::PackageError)?;
+
+        let Some(build) = &self.build else {
+            return Ok(());
+        };
+        let mut build_iter = build.split_whitespace();
+        let mut build_command = Command::new(build_iter.next().unwrap());
+        for arg in build_iter {
+            build_command.arg(arg);
+        }
+
+        build_command.current_dir(&package_path);
+        build_command.stdout(Stdio::piped());
+        build_command.stderr(Stdio::piped());
+
+        build_command
+            .spawn()
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!(
+                    "An error occured when installing package {}",
+                    package_path.display()
+                )
+            })
+            .change_context(InstallPackageError::PackageError)?;
+
+        Ok(())
     }
 }
 

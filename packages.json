@@ -1,22 +1,15 @@
 {
   "packages": {
-    "shaunsingh/nyoom.nvim": {
+    "github:shaunsingh/nyoom.nvim": {
       "opt": true,
-      "branch": "master",
+      "branch": "main",
       "dependencies": {
-        "shaunsingh/repo2.nvim": {
-          "branch": "master",
-          "build": "make all"
-        },
-        "shaunsingh/repo3.nvim": {
-          "opt": true,
-          "commit": "e331b56"
-        }
+        "github:nvim-lua/plenary.nvim": {}
       }
     },
-    "shaunsingh/repo4.nvim": {
-      "opt": true,
-      "ver": "2.3.4"
+    "https://github.com/catppuccin/nvim.git": {
+      "ver": "v0.2.9",
+      "rename": "catppuccin"
     }
   }
 }
