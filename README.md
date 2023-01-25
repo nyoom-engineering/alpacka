@@ -1,0 +1,2 @@
+# alpacka
+Neovim package manager
