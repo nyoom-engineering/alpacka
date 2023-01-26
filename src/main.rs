@@ -3,8 +3,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
 use alpacka::config::Config;
-use error_stack::Context;
+use error_stack::{Context, IntoReport, ResultExt};
 use std::fmt::{Display, Formatter};
+use tracing::info;
 
 #[derive(Debug)]
 struct MainError;
@@ -39,9 +40,35 @@ fn main() -> error_stack::Result<(), MainError> {
     //    println!("cache-path {}", cache_dir);
 
     let config_path = "packages.json";
-    let data_path = std::env::current_dir().unwrap().join("pack");
+    let data_path = std::env::current_dir()
+        .into_report()
+        .attach_printable_lazy(|| "Failed to get current directory. Current directory")
+        .change_context(MainError)?
+        .join("pack");
 
-    let config = Config::load(config_path).context("Failed to load config")?;
+    let config_file = std::fs::File::open(config_path)
+        .into_report()
+        .attach_printable_lazy(|| {
+            format!(
+                "Failed to open config file. Config file path: {}",
+                config_path
+            )
+        })
+        .change_context(MainError)?;
+
+    let config: Config = serde_json::from_reader(config_file)
+        .into_report()
+        .attach_printable_lazy(|| {
+            format!(
+                "Failed to parse config file. Config file path: {}",
+                config_path
+            )
+        })
+        .change_context(MainError)?;
+
+    info!("config loaded, checking for existing manifest");
+
+    todo!("check for existing manifest");
 
     Ok(())
 }

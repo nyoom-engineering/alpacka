@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::config::ConfigPackage;
-use crate::loader::{Loader, LoaderError};
+use crate::loader::{Loader, LoaderError, LoaderResult};
 #[derive(Debug)]
 /// A package declaration
 pub struct Package {
@@ -15,7 +15,7 @@ pub struct Package {
 }
 
 impl Package {
-    fn load(&self, data_path: &Path) -> Result<(), LoaderError> {
+    pub fn load(&self, data_path: &Path) -> Result<LoaderResult, LoaderError> {
         self.loader.load(self, data_path)
     }
 }

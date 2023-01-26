@@ -1,8 +1,16 @@
-use crate::package::Package;
-use error_stack::{bail, Context, IntoReport, Result, ResultExt};
+use crate::{
+    config::ConfigPackage,
+    loader::{Loader, LoaderError, LoaderResult},
+    manifest::ManifestVersion,
+    package::Package,
+};
+use error_stack::{bail, report, Context, IntoReport, Result, ResultExt};
 use git2::Repository;
-use std::{fmt::Display, path::PathBuf};
-use tracing::info;
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
+use tracing::{debug, info};
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -23,11 +31,12 @@ impl Display for CloneError {
 impl Context for CloneError {}
 
 /// clones or updates a package using git
-pub fn update_package(
+/// outputs the resolved commit hash
+fn update_package(
     package: &Package,
     remote_path: &String,
     package_path: &PathBuf,
-) -> Result<(), CloneError> {
+) -> Result<String, CloneError> {
     let tag = package
         .package
         .ver
@@ -174,12 +183,147 @@ pub fn update_package(
                 format!("Failed to checkout head at {}", package_path.display())
             })
             .change_context(CloneError::GitError)?;
+
+        // get the commit hash
+        let commit = repo
+            .head()
+            .into_report()
+            .attach_printable_lazy(|| format!("Failed to get HEAD at {}", package_path.display()))
+            .change_context(CloneError::GitError)?
+            .peel_to_commit()
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!("Failed to get HEAD commit at {}", package_path.display())
+            })
+            .change_context(CloneError::GitError)?;
+
+        Ok(commit.id().to_string())
     } else {
-        Repository::clone_recurse(remote_path, package_path)
+        let repo = Repository::clone_recurse(remote_path, package_path)
             .into_report()
             .attach_printable_lazy(|| format!("Failed to clone {}", remote_path))
             .change_context(CloneError::GitError)?;
+
+        // get the commit hash
+        let commit = repo
+            .head()
+            .into_report()
+            .attach_printable_lazy(|| format!("Failed to get HEAD at {}", package_path.display()))
+            .change_context(CloneError::GitError)?
+            .peel_to_commit()
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!("Failed to get HEAD commit at {}", package_path.display())
+            })
+            .change_context(CloneError::GitError)?;
+
+        Ok(commit.id().to_string())
+    }
+}
+
+#[derive(Debug)]
+pub enum GitLoaderError {
+    InvalidLocator,
+    CloneError,
+}
+
+impl Display for GitLoaderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidLocator => f.write_str(
+                "Invalid locator. Valid options are currently: github, gitlab, and https",
+            ),
+            Self::CloneError => f.write_str("Error cloning repository"),
+        }
+    }
+}
+
+impl Context for GitLoaderError {}
+
+#[derive(Debug, Default)]
+pub enum GitLoaderFormat {
+    #[default]
+    Https,
+    Ssh,
+}
+#[derive(Debug)]
+pub struct GitLoader {
+    format: GitLoaderFormat,
+}
+
+impl GitLoader {
+    /// Get the package directory name
+    pub fn get_repo_name(package: &ConfigPackage, remote_path: &str) -> String {
+        if let Some(renamed) = &package.rename {
+            return renamed.to_owned();
+        }
+        let mut package_dirname = remote_path
+            .split('/')
+            .last()
+            .unwrap_or_else(|| panic!("Invalid remote path: {}", remote_path))
+            .to_owned();
+
+        if package_dirname.ends_with(".git") {
+            package_dirname.truncate(package_dirname.len() - 4);
+        }
+
+        package_dirname
+    }
+}
+
+impl Loader for GitLoader {
+    fn load(&self, package: &Package, data_path: &Path) -> Result<LoaderResult, LoaderError> {
+        let remote_path = match package.name.split_once(':') {
+            None => package.name.to_owned(),
+            Some(("github", path)) => match self.format {
+                GitLoaderFormat::Https => format!("https://github.com/{}.git", path),
+                GitLoaderFormat::Ssh => format!("git@github.com:{}.git", path),
+            },
+            Some(("git", path)) => match self.format {
+                GitLoaderFormat::Https => format!("https://{}.git", path),
+                GitLoaderFormat::Ssh => format!("git@{}.git", path),
+            },
+            Some((_, _)) => {
+                return Err(report!(GitLoaderError::InvalidLocator).change_context(LoaderError))
+            }
+        };
+
+        let mut data_path = data_path.to_path_buf();
+        debug!("data_path {}", data_path.display());
+
+        if package.package.opt.unwrap_or(false) {
+            data_path.push("opt");
+        } else {
+            data_path.push("start");
+        };
+
+        let repo = GitLoader::get_repo_name(&package.package, &remote_path);
+        let package_path = data_path.join(repo);
+
+        let res = update_package(package, &remote_path, &package_path)
+            .change_context(GitLoaderError::CloneError)
+            .change_context(LoaderError)?;
+
+        let version = if package.package.commit.is_some() {
+            ManifestVersion::GitCommit(package.package.commit.clone().unwrap())
+        } else if package.package.branch.is_some() {
+            ManifestVersion::GitBranch(package.package.branch.clone().unwrap())
+        } else if package.package.ver.is_some() {
+            ManifestVersion::GitTag(package.package.ver.clone().unwrap())
+        } else {
+            ManifestVersion::GitCommit(res.clone())
+        };
+
+        Ok(LoaderResult {
+            version,
+            resolved_version: res,
+        })
     }
 
-    Ok(())
+    fn loads_package(&self, name: &str, _package: &ConfigPackage) -> bool {
+        matches!(
+            name.split_once(':'),
+            Some(("github", _)) | Some(("gitlab", _)) | Some(("https", _))
+        )
+    }
 }

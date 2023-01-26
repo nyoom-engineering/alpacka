@@ -1,7 +1,8 @@
 use crate::{loader::Loader, package::Package};
 use error_stack::{Context, IntoReport, Result};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
 #[derive(Debug, Deserialize, Serialize)]
 /// The alpacka config format
