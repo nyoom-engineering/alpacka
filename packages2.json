@@ -2,7 +2,10 @@
   "packages": {
     "github:shaunsingh/nyoom.nvim": {
       "opt": true,
-      "branch": "main"
+      "branch": "main",
+      "dependencies": {
+        "github:nvim-lua/plenary.nvim": {}
+      }
     },
     "https://github.com/catppuccin/nvim.git": {
       "ver": "v0.2.9",

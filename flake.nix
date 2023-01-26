@@ -41,10 +41,13 @@
         src = craneLib.cleanCargoSource ./.;
 
         buildInputs = [
-          # pkgs.pkg-config
-          # pkgs.openssl
+          # libgit2 deps
+          pkgs.pkg-config
+          pkgs.openssl
         ] ++ lib.optionals pkgs.stdenv.isDarwin [
-          # pkgs.darwin.apple_sdk.frameworks.Security
+          # libgit2 deps
+          pkgs.darwin.apple_sdk.frameworks.Security
+          # rust dep
           pkgs.libiconv
         ];
 
@@ -112,12 +115,13 @@
           # Extra inputs can be added here
           nativeBuildInputs = with pkgs; [
             rustToolchain
+            clippy
             alejandra
             rnix-lsp
             pkg-config
             openssl
             git
-          ];
+          ] ++ buildInputs;
         };
       });
 }

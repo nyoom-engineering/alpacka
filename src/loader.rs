@@ -76,7 +76,6 @@ impl Package {
         if let Some(renamed) = &self.rename {
             return renamed.to_owned();
         }
-
         let mut package_dirname = remote_path
             .split('/')
             .last()
@@ -113,7 +112,9 @@ impl Package {
 
         if self.opt.unwrap_or(false) {
             data_path.push("opt");
-        }
+        } else {
+            data_path.push("start");
+        };
 
         let repo = self.get_repo_name(&remote_path);
         let package_path = data_path.join(repo);
@@ -176,14 +177,18 @@ impl Display for ReadError {
 impl Context for ReadError {}
 
 /// Read the package manifest and return the config along with its generation
+#[inline]
 pub fn read<P: AsRef<Path> + Copy>(path: &P) -> Result<(usize, Config), ReadError> {
     let json_bytes = fs::read(path)
         .into_report()
         .change_context(ReadError::IoError)?;
     let json_hash = hash_json(&json_bytes);
+
     let index_path = Path::new("index.bin");
-    let bincode_path = format!("{json_hash}.bin");
-    let (generation, config) = if fs::metadata(&bincode_path).is_ok() {
+    let bincode_filename = format!("{json_hash}.bin");
+    let bincode_path = Path::new(&bincode_filename);
+
+    let (generation, config) = if fs::metadata(bincode_path).is_ok() {
         let file_handle = fs::File::open(index_path)
             .into_report()
             .change_context(ReadError::IoError)?;
@@ -196,7 +201,7 @@ pub fn read<P: AsRef<Path> + Copy>(path: &P) -> Result<(usize, Config), ReadErro
                 "Loading bincode for generation {} for hash {}",
                 gen, json_hash
             );
-            let file = fs::read(&bincode_path)
+            let file = fs::read(bincode_path)
                 .into_report()
                 .change_context(ReadError::IoError)?;
 
@@ -217,7 +222,7 @@ pub fn read<P: AsRef<Path> + Copy>(path: &P) -> Result<(usize, Config), ReadErro
 
             write_to_index(index_path, json_hash.clone(), new_gen)
                 .change_context(ReadError::IoError)?;
-            serialize_to_file(&config, &bincode_path).change_context(ReadError::IoError)?;
+            serialize_to_file(&config, bincode_path).change_context(ReadError::IoError)?;
 
             (new_gen, config)
         }
@@ -231,7 +236,7 @@ pub fn read<P: AsRef<Path> + Copy>(path: &P) -> Result<(usize, Config), ReadErro
             .into_report()
             .change_context(ReadError::SerdeError)?;
         write_to_index(index_path, json_hash, 0)?;
-        serialize_to_file(&config, &bincode_path)?;
+        serialize_to_file(&config, bincode_path)?;
 
         (0, config)
     };
@@ -252,7 +257,7 @@ fn write_to_index<P: AsRef<Path> + Copy>(
     hash: String,
     generation: usize,
 ) -> Result<(), ReadError> {
-    let index_data = match fs::metadata(index_path) {
+    let mut index_data = match fs::metadata(index_path) {
         Ok(_) => deserialize_from(
             fs::File::open(index_path)
                 .into_report()
@@ -263,7 +268,6 @@ fn write_to_index<P: AsRef<Path> + Copy>(
 
         Err(_) => HashMap::new(),
     };
-    let mut index_data = index_data;
     index_data.insert(hash, generation);
     let encoded = serialize(&index_data)
         .into_report()

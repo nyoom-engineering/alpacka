@@ -1,13 +1,11 @@
-//! Git related functions for alpacka
-
-use std::{fmt::Display, path::PathBuf};
-
 use crate::loader::Package;
 use error_stack::{bail, Context, IntoReport, Result, ResultExt};
 use git2::Repository;
+use std::{fmt::Display, path::PathBuf};
 use tracing::info;
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum CloneError {
     GitError,
     MultipleLock,
@@ -15,7 +13,7 @@ pub enum CloneError {
 
 impl Display for CloneError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match *self {
             Self::GitError => f.write_str("Failed to update/install package"),
             Self::MultipleLock => f.write_str("Multiple lock types set"),
         }
@@ -30,8 +28,8 @@ pub fn update_package(
     remote_path: &String,
     package_path: &PathBuf,
 ) -> Result<(), CloneError> {
-    let tag = package.ver.as_ref().map(|v| format!("refs/tags/{}", v));
-    let branch = package.branch.as_ref().map(|v| format!("refs/heads/{}", v));
+    let tag = package.ver.as_ref().map(|v| format!("refs/tags/{v}"));
+    let branch = package.branch.as_ref().map(|v| format!("refs/heads/{v}"));
     let commit = &package.commit;
 
     // make sure only one of these is set
@@ -82,16 +80,19 @@ pub fn update_package(
         fetch_options.download_tags(git2::AutotagOption::All);
         info!("Updating {}", package_path.display());
 
-        let refspecs = if let Some(tag) = tag {
-            tag
-        } else if let Some(branch) = branch {
-            branch
-        } else {
-            match commit {
-                Some(commit) => commit.to_string(),
-                None => "HEAD".to_string(),
-            }
-        };
+        let refspecs = tag.map_or_else(
+            || {
+                if let Some(branch) = branch {
+                    branch
+                } else {
+                    match commit {
+                        Some(commit) => commit.to_string(),
+                        None => "HEAD".to_string(),
+                    }
+                }
+            },
+            |tag| tag,
+        );
 
         remote
             .fetch(&[&refspecs], Some(&mut fetch_options), None)
