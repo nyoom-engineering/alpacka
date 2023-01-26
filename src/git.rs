@@ -1,4 +1,4 @@
-use crate::loader::Package;
+use crate::package::Package;
 use error_stack::{bail, Context, IntoReport, Result, ResultExt};
 use git2::Repository;
 use std::{fmt::Display, path::PathBuf};
@@ -22,15 +22,23 @@ impl Display for CloneError {
 
 impl Context for CloneError {}
 
-/// clones or updates a package
+/// clones or updates a package using git
 pub fn update_package(
     package: &Package,
     remote_path: &String,
     package_path: &PathBuf,
 ) -> Result<(), CloneError> {
-    let tag = package.ver.as_ref().map(|v| format!("refs/tags/{v}"));
-    let branch = package.branch.as_ref().map(|v| format!("refs/heads/{v}"));
-    let commit = &package.commit;
+    let tag = package
+        .package
+        .ver
+        .as_ref()
+        .map(|v| format!("refs/tags/{v}"));
+    let branch = package
+        .package
+        .branch
+        .as_ref()
+        .map(|v| format!("refs/heads/{v}"));
+    let commit = &package.package.commit;
 
     // make sure only one of these is set
     if (tag.is_some() && branch.is_some())

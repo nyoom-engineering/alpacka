@@ -2,10 +2,9 @@
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use alpacka::loader;
-use error_stack::{Context, ResultExt};
+use alpacka::config::Config;
+use error_stack::Context;
 use std::fmt::{Display, Formatter};
-use tracing::{debug, info};
 
 #[derive(Debug)]
 struct MainError;
@@ -42,15 +41,7 @@ fn main() -> error_stack::Result<(), MainError> {
     let config_path = "packages.json";
     let data_path = std::env::current_dir().unwrap().join("pack");
 
-    debug!("config-path {}", config_path);
-    let (generation, config) = loader::read(&config_path).change_context(MainError)?;
-    debug!("config {:#?} generation {}", config, generation);
-
-    info!("Installing packages...");
-    config
-        .install_all_packages(&data_path)
-        .change_context(MainError)?;
-    info!("Installed all packages!");
+    let config = Config::load(config_path).context("Failed to load config")?;
 
     Ok(())
 }
