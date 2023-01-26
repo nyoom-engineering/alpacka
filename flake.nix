@@ -115,7 +115,6 @@
           # Extra inputs can be added here
           nativeBuildInputs = with pkgs; [
             rustToolchain
-            clippy
             alejandra
             rnix-lsp
             pkg-config
