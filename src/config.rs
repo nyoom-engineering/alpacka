@@ -1,14 +1,16 @@
-use crate::{loader::Loader, package::Package};
-use error_stack::{Context, IntoReport, Result};
-use hashbrown::HashMap;
+use crate::{
+    package::{Config as ConfigPackage, Package, WithSmith},
+    smith::{LoaderInput, Smith},
+};
+use error_stack::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, sync::Arc};
+use std::{collections::BTreeMap, fmt::Display};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
 /// The alpacka config format
 pub struct Config {
     /// All the packages
-    pub packages: HashMap<String, ConfigPackage>,
+    pub packages: BTreeMap<String, ConfigPackage>,
 }
 
 #[derive(Debug)]
@@ -20,7 +22,7 @@ impl Display for CreatePackageListError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoLoaderFound(name) => {
-                f.write_str(&format!("No loader found for package {}", name))
+                write!(f, "No loader found for package {name}")
             }
         }
     }
@@ -29,47 +31,33 @@ impl Display for CreatePackageListError {
 impl Context for CreatePackageListError {}
 
 impl Config {
+    /// Create a list of packages with their corresponding smith
+    ///
+    /// # Errors
+    /// This function will return an error if no loader can be found for a package
     pub fn create_package_list(
         &self,
-        loaders: Vec<Arc<dyn Loader>>,
-    ) -> Result<Vec<Package>, CreatePackageListError> {
+        smiths: &[Box<dyn Smith<Input = Box<dyn LoaderInput>>>],
+    ) -> Result<Vec<WithSmith>, CreatePackageListError> {
         let mut packages = Vec::with_capacity(self.packages.len());
 
-        for (name, package) in &self.packages {
-            let loader = loaders
-                .iter()
-                .find(|loader| loader.loads_package(name, package))
-                .ok_or_else(|| CreatePackageListError::NoLoaderFound(name.to_owned()))
-                .into_report()?
-                .clone();
-
-            let pkg = Package {
-                loader,
-                name: name.to_owned(),
-                package: package.clone(),
+        for (name, config_package) in &self.packages {
+            let package = Package {
+                name: name.clone(),
+                package: config_package.clone(),
             };
 
-            packages.push(pkg);
+            let smith_idx = smiths
+                .iter()
+                .position(|smith| smith.handles_package(&package))
+                .ok_or_else(|| CreatePackageListError::NoLoaderFound(name.clone()))?;
+
+            packages.push(WithSmith {
+                smith: smiths[smith_idx].name().to_string(),
+                package,
+            });
         }
 
         Ok(packages)
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ConfigPackage {
-    /// Don't load the package on startup
-    pub opt: Option<bool>,
-    /// The package version. Internally uses git tags
-    pub ver: Option<String>,
-    /// rename the package to something else
-    pub rename: Option<String>,
-    /// the remote branch
-    pub branch: Option<String>,
-    /// the remote commit
-    pub commit: Option<String>,
-    /// A command to build the package. This is run in the package directory
-    pub build: Option<String>,
-    /// A list of dependencies
-    pub dependencies: Option<HashMap<String, ConfigPackage>>,
 }
