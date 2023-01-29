@@ -9,7 +9,7 @@ use error_stack::{Context, IntoReport, Result, ResultExt};
 use rayon::prelude::*;
 use serde_cbor::from_reader;
 use std::{
-    collections::{hash_map::DefaultHasher, BTreeMap},
+    collections::hash_map::DefaultHasher,
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
     io::{BufRead, BufReader},
@@ -390,22 +390,17 @@ fn create_manifest_from_config(
                         )
                     })?,
                 rename: package.package.package.rename.clone(),
-                optional: package.package.package.opt.unwrap_or(false),
+                optional: package.package.package.optional.unwrap_or(false),
                 dependencies: package
                     .package
                     .package
                     .dependencies
                     .clone()
-                    .unwrap_or(BTreeMap::new())
+                    .unwrap_or_default()
                     .keys()
                     .cloned()
                     .collect(),
-                build: package
-                    .package
-                    .package
-                    .build
-                    .clone()
-                    .unwrap_or("".to_string()),
+                build: package.package.package.build.clone().unwrap_or_default(),
                 smith: package.smith.clone(),
                 loader_data,
             };

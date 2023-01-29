@@ -101,7 +101,7 @@ impl Smith for Git {
         let url = match (repo_type.as_str(), repo_url.as_str()) {
             // repo format: git:host:path
             ("git", repo) => match self.clone_type {
-                CloneType::Ssh => format!("git@{repo}"),
+                CloneType::Ssh => format!("git@{repo}.git"),
                 CloneType::Https => {
                     let (host, path) = repo
                         .split_once(':')
@@ -113,11 +113,11 @@ impl Smith for Git {
                 }
             },
             ("github", repo_url) => match self.clone_type {
-                CloneType::Ssh => format!("git@github.com:{repo_url}"),
+                CloneType::Ssh => format!("git@github.com:{repo_url}.git"),
                 CloneType::Https => format!("https://github.com/{repo_url}.git"),
             },
             ("gitlab", repo_url) => match self.clone_type {
-                CloneType::Ssh => format!("git@gitlab.com:{repo_url}"),
+                CloneType::Ssh => format!("git@gitlab.com:{repo_url}.git"),
                 CloneType::Https => format!("https://gitlab.com/{repo_url}.git"),
             },
             ("srht", repo_url) => match self.clone_type {

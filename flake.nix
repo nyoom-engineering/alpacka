@@ -38,7 +38,7 @@
         overlays = [ (import rust-overlay) ];
       };
 
-      rustToolchain = pkgs.pkgsBuildHost.rust-bin.nightly.latest.default.override {
+      rustToolchain = pkgs.pkgsBuildHost.rust-bin.stable.latest.default.override {
         extensions = [ "rust-src" "rust-analyzer" ];
       };
 

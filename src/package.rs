@@ -11,7 +11,7 @@ use crate::smith::{DynSmith, LoaderInput, ResolveError};
 /// A package declaration, as found in a config file
 pub struct Config {
     /// Don't load the package on startup
-    pub opt: Option<bool>,
+    pub optional: Option<bool>,
     /// The package version. Internally uses git tags when using git, else the resolver decides
     pub version: Option<String>,
     /// rename the package to something else
@@ -40,7 +40,7 @@ impl WithSmith {
     /// Check if this package is optional
     #[must_use]
     pub fn is_optional(&self) -> bool {
-        self.package.package.opt.unwrap_or(false)
+        self.package.package.optional.unwrap_or(false)
     }
 
     /// Resolve a package to a loader package, which has all the necessary information to load the package.
