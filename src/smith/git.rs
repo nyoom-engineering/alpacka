@@ -1,5 +1,12 @@
-use crate::package::Package;
-use error_stack::{Context, IntoReport, Result, ResultExt};
+use crate::{
+    package::Package,
+    smith::{DeserializeLoaderInput, SerializeLoaderInput},
+};
+use bytecheck::CheckBytes;
+use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
+use rkyv::Archive;
+use rkyv_dyn::archive_dyn;
+use rkyv_typename::TypeName;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, fmt::Display, path::Path};
 use tracing::debug;
@@ -66,13 +73,14 @@ pub enum LockType {
     Default,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, rkyv::Serialize, rkyv::Deserialize, Archive, Clone)]
+#[archive_attr(derive(CheckBytes, Debug, TypeName))]
 pub struct LoaderType {
     commit_hash: String,
     remote: String,
 }
 
-#[typetag::serde]
+#[archive_dyn(deserialize)]
 impl LoaderInput for LoaderType {}
 
 impl UpcastAny for LoaderType {
@@ -88,7 +96,7 @@ impl Smith for Git {
         "git".to_string()
     }
 
-    fn resolve(&self, package: &Package) -> Result<Self::Input, ResolveError> {
+    fn resolve(&self, package: &Package) -> ErrorStackResult<Self::Input, ResolveError> {
         let Some((repo_type, repo_url)) = package
                 .name
                 .split_once(':') else {
@@ -187,7 +195,7 @@ impl Smith for Git {
         })
     }
 
-    fn load(&self, input: &Self::Input, path: &Path) -> Result<(), LoadError> {
+    fn load(&self, input: &Self::Input, path: &Path) -> ErrorStackResult<(), LoadError> {
         let repo = match git2::Repository::open(path) {
             Ok(repo) => repo,
             Err(e) => match e.code() {
@@ -251,7 +259,7 @@ fn fetch_remote(
     url: &String,
     lock_type: &LockType,
     remote: &mut git2::Remote,
-) -> Result<(), ResolveError> {
+) -> ErrorStackResult<(), ResolveError> {
     match lock_type {
         LockType::Tag(tag) => {
             remote

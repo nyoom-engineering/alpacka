@@ -7,17 +7,19 @@ use alpacka::{
 };
 use error_stack::{Context, IntoReport, Result, ResultExt};
 use rayon::prelude::*;
-use serde_cbor::from_reader;
+use rkyv::from_bytes;
 use std::{
     collections::hash_map::DefaultHasher,
     fmt::{Display, Formatter},
+    fs::read,
     hash::{Hash, Hasher},
     io::{BufRead, BufReader},
+    ops::Deref,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug)]
 struct MainError;
@@ -81,7 +83,7 @@ fn main() -> error_stack::Result<(), MainError> {
     let config_hash = hasher.finish();
     let alpacka_path = data_path.join("alpacka");
 
-    let generation_path = alpacka_path.join("generations.cbor");
+    let generation_path = alpacka_path.join("generations.rkyv");
 
     if !alpacka_path.exists() {
         std::fs::create_dir_all(&alpacka_path)
@@ -96,27 +98,25 @@ fn main() -> error_stack::Result<(), MainError> {
     }
 
     let manifest = if generation_path.exists() {
-        let generations_file = std::fs::File::open(&generation_path)
+        let generations_file = read(&generation_path)
             .into_report()
             .attach_printable_lazy(|| {
                 format!(
-                    "Failed to open generations file. Generations file path: {}",
+                    "Failed to read generations file. Generations file path: {}",
                     generation_path.display()
                 )
             })
             .change_context(MainError)?;
 
-        let mut generations = GenerationsFile(
-            from_reader(generations_file)
-                .into_report()
-                .attach_printable_lazy(|| {
-                    format!(
-                        "Failed to parse generations file. Generations file path: {}",
-                        generation_path.display()
-                    )
-                })
-                .change_context(MainError)?,
-        );
+        let mut generations: GenerationsFile = from_bytes(&generations_file)
+            .map_err(|_| MainError) // TODO: better error
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!(
+                    "Failed to parse generations file. Generations file path: {}",
+                    generation_path.display()
+                )
+            })?;
 
         // find generation that have the same hash as the current config, and the highest generation
         match generations.get_latest_generation(config_hash) {
@@ -125,22 +125,26 @@ fn main() -> error_stack::Result<(), MainError> {
                     "Found generation with the same hash as the current config, loading manifest"
                 );
 
-                let file = std::fs::File::open(manifest)
+                let manifest_file = read(manifest.path.deref())
                     .into_report()
                     .attach_printable_lazy(|| {
                         format!(
                             "Failed to open manifest file. Manifest file path: {}",
-                            manifest.display()
+                            manifest.path.display()
                         )
                     })
                     .change_context(MainError)?;
 
-                let manifest: Manifest = from_reader(file)
+                let manifest: Manifest = from_bytes(&manifest_file)
+                    .map_err(|e| {
+                        error!("Failed to parse manifest file: {}", e);
+                        MainError
+                    }) // TODO: better error
                     .into_report()
                     .attach_printable_lazy(|| {
                         format!(
                             "Failed to parse manifest file. Manifest file path: {}",
-                            manifest.display()
+                            manifest.path.display()
                         )
                     })
                     .change_context(MainError)?;
@@ -316,7 +320,7 @@ fn generate_manifest(
     let manifest = create_manifest_from_config(smiths, config)?;
 
     info!("Saving generation file");
-    let manifest_path = alpacka_path.join(format!("manifest-{}.cbor", &generation_hash));
+    let manifest_path = alpacka_path.join(format!("manifest-{}.rkyv", &generation_hash));
     manifest
         .save_to_file(&manifest_path)
         .into_report()
