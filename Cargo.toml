@@ -23,3 +23,8 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 rkyv_typename = "0.7.33"
 ptr_meta = "0.1.4"
+
+[patch.crates-io]
+rkyv = { git = "https://github.com/rkyv/rkyv", branch = "rkyv_dyn_error_box" }
+rkyv_dyn = { git = "https://github.com/rkyv/rkyv", branch = "rkyv_dyn_error_box" }
+rkyv_typename = { git = "https://github.com/rkyv/rkyv", branch = "rkyv_dyn_error_box" }
