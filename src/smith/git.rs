@@ -96,9 +96,18 @@ impl Smith for Git {
         let repo_url = repo_url.to_owned();
 
         let url = match (repo_type.as_str(), repo_url.as_str()) {
-            ("git", repo_url) => match self.clone_type {
-                CloneType::Ssh => format!("git@{repo_url}"),
-                CloneType::Https => repo_url.to_string(),
+            // repo format: git:host:path
+            ("git", repo) => match self.clone_type {
+                CloneType::Ssh => format!("git@{repo}"),
+                CloneType::Https => {
+                    let (host, path) = repo
+                        .split_once(':')
+                        .ok_or(ResolveError)
+                        .into_report()
+                        .attach_printable_lazy(|| format!("Failed to parse git repo: {repo}"))?;
+
+                    format!("https://{host}/{path}.git")
+                }
             },
             ("github", repo_url) => match self.clone_type {
                 CloneType::Ssh => format!("git@github.com:{repo_url}"),
@@ -106,6 +115,8 @@ impl Smith for Git {
             },
             _ => unreachable!("should be handled by handles_package"),
         };
+
+        debug!("url: {url}");
 
         let lock_type = match package
             .package
@@ -118,6 +129,8 @@ impl Smith for Git {
             Some(("branch", branch)) => LockType::Branch(branch.to_string()),
             _ => LockType::Default,
         };
+
+        debug!("lock_type: {lock_type:?}");
 
         let temp_git_dir = tempfile::tempdir()
             .into_report()

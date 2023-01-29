@@ -4,7 +4,7 @@
       "opt": true,
       "version": "branch:main"
     },
-    "git:https://github.com/catppuccin/nvim.git": {
+    "git:github.com:catppuccin/nvim": {
       "version": "tag:v0.2.9",
       "rename": "catppuccin",
       "build": "echo 'hi'"
