@@ -3,7 +3,7 @@
 use alpacka::{
     config::Config,
     manifest::{GenerationsFile, Manifest, Plugin},
-    smith::{Git, LoaderInput, Smith},
+    smith::{Git, Smith},
 };
 use error_stack::{Context, IntoReport, Result, ResultExt};
 use rayon::prelude::*;
@@ -12,9 +12,12 @@ use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
-    path::Path,
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    thread,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Debug)]
 struct MainError;
@@ -168,43 +171,130 @@ fn main() -> error_stack::Result<(), MainError> {
 
     manifest
         .plugins
-        .into_par_iter()
-        .map(|plugin| {
-            let smith = smiths
-                .iter()
-                .find(|s| s.name() == plugin.smith)
-                .ok_or(MainError)
-                .into_report()
-                .attach_printable_lazy(|| {
-                    format!("Failed to find smith. Smith name: {}", plugin.smith)
-                })?;
-
-            let package_path = alpacka_path.join(if let Some(rename) = plugin.rename {
-                rename
-            } else {
-                plugin.name.clone()
-            });
-
-            smith
-                .load(plugin.loader_data.into(), &package_path)
-                .attach_printable_lazy(|| {
-                    format!(
-                        "Failed to load package. Package name: {}, Package path: {}",
-                        plugin.name,
-                        package_path.display()
-                    )
-                })
-                .change_context(MainError)?;
-
-            Ok(())
-        })
+        .par_iter()
+        .map(|plugin| load_plugin(&smiths, plugin, &manifest, &alpacka_path))
         .collect::<Result<_, _>>()?;
 
     Ok(())
 }
 
+fn load_plugin(
+    smiths: &Vec<Box<dyn Smith>>,
+    plugin: &Plugin,
+    manifest: &Manifest,
+    alpacka_path: &PathBuf,
+) -> Result<(), MainError> {
+    for dep in &plugin.dependencies {
+        let dep = manifest
+            .plugins
+            .iter()
+            .find(|p| &p.name == dep)
+            .ok_or(MainError)
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!("Failed to find dependency. Dependency name: {dep}")
+            })?;
+
+        load_plugin(smiths, dep, manifest, alpacka_path)?;
+    }
+
+    let smith = smiths
+        .iter()
+        .find(|s| s.name() == plugin.smith)
+        .ok_or(MainError)
+        .into_report()
+        .attach_printable_lazy(|| format!("Failed to find smith. Smith name: {}", plugin.smith))?;
+    let mut package_path = alpacka_path.clone();
+
+    if plugin.optional {
+        package_path = package_path.join("opt");
+    } else {
+        package_path = package_path.join("start");
+    }
+
+    if let Some(rename) = &plugin.rename {
+        package_path = package_path.join(rename);
+    } else {
+        package_path = package_path.join(&plugin.name);
+    }
+
+    smith
+        .load(&plugin.loader_data, &package_path)
+        .attach_printable_lazy(|| {
+            format!(
+                "Failed to load package. Package name: {}, Package path: {}",
+                plugin.name,
+                package_path.display()
+            )
+        })
+        .change_context(MainError)?;
+
+    // run the build script if it exists
+    if !plugin.build.is_empty() {
+        let mut split = plugin.build.split_whitespace().collect::<Vec<_>>();
+
+        let command = Command::new(split.remove(0))
+            .args(split)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(&package_path)
+            .spawn()
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!(
+                    "Failed to run build script. Package name: {}, Package path: {}",
+                    plugin.name,
+                    package_path.display()
+                )
+            })
+            .change_context(MainError)?;
+
+        let stdout = command
+            .stdout
+            .ok_or(MainError)
+            .into_report()
+            .change_context(MainError)?;
+
+        let stderr = command
+            .stderr
+            .ok_or(MainError)
+            .into_report()
+            .change_context(MainError)?;
+
+        let stdout = BufReader::new(stdout);
+        let stderr = BufReader::new(stderr);
+
+        thread::scope(move |threads| -> Result<(), MainError> {
+            let stdout = threads.spawn(move || -> Result<(), MainError> {
+                for line in stdout.lines() {
+                    let line = line.into_report().change_context(MainError)?;
+                    info!("STDOUT {}: {}", plugin.name, line);
+                }
+
+                Ok(())
+            });
+
+            let stderr = threads.spawn(move || -> Result<(), MainError> {
+                for line in stderr.lines() {
+                    let line = line.into_report().change_context(MainError)?;
+                    warn!("STDOUT {}: {}", plugin.name, line);
+                }
+
+                Ok(())
+            });
+
+            stdout.join().unwrap()?;
+            stderr.join().unwrap()?;
+
+            Ok(())
+        })?;
+    }
+
+    Ok(())
+}
+
 fn generate_manifest(
-    smiths: &[Box<dyn Smith<Input = Box<dyn LoaderInput>>>],
+    smiths: &[Box<dyn Smith>],
     generations: &mut GenerationsFile,
     config: Config,
     alpacka_path: &Path,
@@ -256,7 +346,7 @@ fn generate_manifest(
 }
 
 fn create_manifest_from_config(
-    smiths: &[Box<dyn Smith<Input = Box<dyn LoaderInput>>>],
+    smiths: &[Box<dyn Smith>],
     config: Config,
 ) -> Result<Manifest, MainError> {
     let packages = config
@@ -275,11 +365,30 @@ fn create_manifest_from_config(
         .collect::<Result<Vec<_>, _>>()?;
 
     info!("resolved, saving manifest");
+
     let plugins = resolved_packages
         .into_iter()
         .map(|(loader_data, package)| {
+            let smith = smiths
+                .iter()
+                .find(|s| s.name() == package.smith)
+                .ok_or(MainError)
+                .into_report()
+                .attach_printable_lazy(|| {
+                    format!("Failed to find smith. Smith name: {}", package.smith)
+                })?;
+
             let plugin = Plugin {
-                name: package.package.name.clone(),
+                name: smith
+                    .get_package_name(&package.package.name)
+                    .ok_or(MainError)
+                    .into_report()
+                    .attach_printable_lazy(|| {
+                        format!(
+                            "Failed to get package name. Package name: {}",
+                            package.package.name
+                        )
+                    })?,
                 rename: package.package.package.rename.clone(),
                 optional: package.package.package.opt.unwrap_or(false),
                 dependencies: package

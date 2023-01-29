@@ -1,6 +1,6 @@
 use crate::{
     package::{Config as ConfigPackage, Package, WithSmith},
-    smith::{LoaderInput, Smith},
+    smith::Smith,
 };
 use error_stack::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ impl Config {
     /// This function will return an error if no loader can be found for a package
     pub fn create_package_list(
         &self,
-        smiths: &[Box<dyn Smith<Input = Box<dyn LoaderInput>>>],
+        smiths: &[Box<dyn Smith>],
     ) -> Result<Vec<WithSmith>, CreatePackageListError> {
         let mut packages = Vec::with_capacity(self.packages.len());
 
@@ -49,7 +49,7 @@ impl Config {
 
             let smith_idx = smiths
                 .iter()
-                .position(|smith| smith.handles_package(&package))
+                .position(|smith| smith.get_package_name(&package.name).is_some())
                 .ok_or_else(|| CreatePackageListError::NoLoaderFound(name.clone()))?;
 
             packages.push(WithSmith {

@@ -1,7 +1,7 @@
 use crate::package::Package;
 use error_stack::{Context, IntoReport, Result, ResultExt};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, path::Path};
+use std::{any::Any, fmt::Display, path::Path};
 use tracing::debug;
 
 use super::{LoadError, LoaderInput, ResolveError, Smith};
@@ -38,12 +38,12 @@ pub struct Git {
 impl Git {
     #[must_use]
     /// Create a new git smith with the default clone type
-    pub fn create() -> Box<dyn Smith<Input = Box<dyn LoaderInput>>> {
+    pub fn create() -> Box<dyn Smith> {
         Self::create_with_type(CloneType::default())
     }
 
     #[must_use]
-    pub fn create_with_type(clone_type: CloneType) -> Box<dyn Smith<Input = Box<dyn LoaderInput>>> {
+    pub fn create_with_type(clone_type: CloneType) -> Box<dyn Smith> {
         Box::new(Self { clone_type })
     }
 }
@@ -67,24 +67,25 @@ pub struct LoaderType {
 }
 
 #[typetag::serde]
-impl LoaderInput for LoaderType {}
+impl LoaderInput for LoaderType {
+    fn any(&self) -> Box<dyn Any> {
+        Box::new(self.clone())
+    }
+}
 
 #[typetag::serde]
-impl LoaderInput for Box<LoaderType> {}
+impl LoaderInput for Box<LoaderType> {
+    fn any(&self) -> Box<dyn Any> {
+        Box::new(self.clone())
+    }
+}
 
 impl Smith for Git {
-    type Input = Box<dyn LoaderInput>;
-
     fn name(&self) -> String {
         "git".to_string()
     }
 
-    fn handles_package(&self, package: &crate::package::Package) -> bool {
-        debug!("{:?}", package.name.split_once(':'));
-        matches!(package.name.split_once(':'), Some(("git" | "github", _)))
-    }
-
-    fn resolve(&self, package: &Package) -> Result<Self::Input, ResolveError> {
+    fn resolve(&self, package: &Package) -> Result<Box<dyn LoaderInput>, ResolveError> {
         let Some((repo_type, repo_url)) = package
                 .name
                 .split_once(':') else {
@@ -106,22 +107,17 @@ impl Smith for Git {
             _ => unreachable!("should be handled by handles_package"),
         };
 
-        let lock_type = package.package.ver.as_ref().map_or_else(
-            || {
-                package.package.branch.as_ref().map_or_else(
-                    || {
-                        package
-                            .package
-                            .commit
-                            .as_ref()
-                            .cloned()
-                            .map_or(LockType::Default, LockType::Commit)
-                    },
-                    |branch| LockType::Branch(branch.clone()),
-                )
-            },
-            |ver| LockType::Tag(ver.clone()),
-        );
+        let lock_type = match package
+            .package
+            .version
+            .as_ref()
+            .and_then(|v| v.split_once(':'))
+        {
+            Some(("tag", tag)) => LockType::Tag(tag.to_string()),
+            Some(("commit", commit)) => LockType::Commit(commit.to_string()),
+            Some(("branch", branch)) => LockType::Branch(branch.to_string()),
+            _ => LockType::Default,
+        };
 
         let temp_git_dir = tempfile::tempdir()
             .into_report()
@@ -167,10 +163,14 @@ impl Smith for Git {
         }))
     }
 
-    fn load(&self, input: Self::Input, path: &Path) -> Result<(), LoadError> {
-        let input = (input).any();
-        dbg!(input.is::<Box<dyn LoaderInput>>());
-        let input = input.downcast_ref::<LoaderType>().unwrap();
+    fn load(&self, input: &dyn LoaderInput, path: &Path) -> Result<(), LoadError> {
+        let input = input
+            .any()
+            .downcast::<LoaderType>()
+            .map_err(|_| LoadError)
+            .into_report()
+            .attach_printable_lazy(|| format!("Failed to downcast input to LoaderType: {input:?}"))
+            .change_context(LoadError)?;
 
         let repo = match git2::Repository::open(path) {
             Ok(repo) => repo,
@@ -190,49 +190,42 @@ impl Smith for Git {
             },
         };
 
-        let mut remote = repo
-            .remote_anonymous(&input.remote)
+        repo.remote_anonymous(&input.remote)
             .into_report()
             .change_context(GitError::GitError)
             .attach_printable_lazy(|| format!("Failed to add remote: {}", input.remote))
             .change_context(LoadError)?;
 
-        fetch_remote(
-            &input.remote,
-            &LockType::Commit(input.commit_hash.clone()),
-            &mut remote,
-        )
-        .change_context(LoadError)?;
-
-        let fetch_head = repo
-            .find_reference("FETCH_HEAD")
+        let commit_hash = git2::Oid::from_str(&input.commit_hash)
             .into_report()
             .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {}", input.remote))
+            .attach_printable_lazy(|| format!("Failed to parse commit hash: {}", input.commit_hash))
             .change_context(LoadError)?;
 
-        let commit = fetch_head
-            .peel_to_commit()
+        let commit = repo
+            .find_commit(commit_hash)
             .into_report()
             .change_context(GitError::GitError)
-            .attach_printable_lazy(|| {
-                format!("Failed to peel FETCH_HEAD to commit: {}", input.remote)
-            })
+            .attach_printable_lazy(|| format!("Failed to find commit: {}", input.commit_hash))
             .change_context(LoadError)?;
 
-        let commit_hash = commit.id().to_string();
+        debug!("Resetting {} to commit: {:?}", input.remote, commit);
 
-        if commit_hash != input.commit_hash {
-            repo.reset(&commit.into_object(), git2::ResetType::Hard, None)
-                .into_report()
-                .change_context(GitError::GitError)
-                .attach_printable_lazy(|| {
-                    format!("Failed to reset to FETCH_HEAD: {}", input.remote)
-                })
-                .change_context(LoadError)?;
-        }
+        repo.reset(&commit.into_object(), git2::ResetType::Hard, None)
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to reset to FETCH_HEAD: {}", input.remote))
+            .change_context(LoadError)?;
 
         Ok(())
+    }
+
+    fn get_package_name(&self, name: &str) -> Option<String> {
+        match name.split_once(':') {
+            Some(("github", name)) => name.split_once('/').map(|(_, name)| name.to_string()),
+            Some(("git", name)) => name.rsplit_once('/').map(|(_, name)| name.to_string()),
+            _ => None,
+        }
     }
 }
 

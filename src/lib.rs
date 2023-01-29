@@ -4,5 +4,4 @@
 pub mod config;
 pub mod manifest;
 pub mod package;
-pub mod semver;
 pub mod smith;

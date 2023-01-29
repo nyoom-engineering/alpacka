@@ -13,13 +13,9 @@ pub struct Config {
     /// Don't load the package on startup
     pub opt: Option<bool>,
     /// The package version. Internally uses git tags when using git, else the resolver decides
-    pub ver: Option<String>,
+    pub version: Option<String>,
     /// rename the package to something else
     pub rename: Option<String>,
-    /// the remote branch
-    pub branch: Option<String>,
-    /// the remote commit
-    pub commit: Option<String>,
     /// A command to build the package. This is run in the package directory
     pub build: Option<String>,
     /// A list of dependencies
@@ -51,10 +47,7 @@ impl WithSmith {
     ///
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
-    pub fn resolve(
-        &self,
-        smiths: &[Box<dyn Smith<Input = Box<dyn LoaderInput>>>],
-    ) -> Result<Box<dyn LoaderInput>, ResolveError> {
+    pub fn resolve(&self, smiths: &[Box<dyn Smith>]) -> Result<Box<dyn LoaderInput>, ResolveError> {
         let smith = smiths
             .iter()
             .find(|smith| smith.name() == self.smith)

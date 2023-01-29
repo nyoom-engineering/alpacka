@@ -2,11 +2,12 @@
   "packages": {
     "github:shaunsingh/nyoom.nvim": {
       "opt": true,
-      "branch": "main"
+      "version": "branch:main"
     },
     "git:https://github.com/catppuccin/nvim.git": {
-      "ver": "v0.2.9",
-      "rename": "catppuccin"
+      "version": "tag:v0.2.9",
+      "rename": "catppuccin",
+      "build": "echo 'hi'"
     }
   }
 }
