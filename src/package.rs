@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use error_stack::{IntoReport, Result, ResultExt};
 use serde::{Deserialize, Serialize};
 
-use crate::smith::{LoaderInput, ResolveError, Smith};
+use crate::smith::{DynSmith, LoaderInput, ResolveError};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 /// A package declaration, as found in a config file
@@ -47,7 +47,10 @@ impl WithSmith {
     ///
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
-    pub fn resolve(&self, smiths: &[Box<dyn Smith>]) -> Result<Box<dyn LoaderInput>, ResolveError> {
+    pub fn resolve(
+        &self,
+        smiths: &[Box<dyn DynSmith>],
+    ) -> Result<Box<dyn LoaderInput>, ResolveError> {
         let smith = smiths
             .iter()
             .find(|smith| smith.name() == self.smith)
@@ -55,6 +58,6 @@ impl WithSmith {
             .into_report()
             .attach_printable_lazy(|| format!("Smith {} not found", self.smith))?;
 
-        smith.resolve(&self.package)
+        smith.resolve_dyn(&self.package)
     }
 }

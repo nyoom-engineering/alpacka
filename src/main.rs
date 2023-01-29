@@ -3,7 +3,7 @@
 use alpacka::{
     config::Config,
     manifest::{GenerationsFile, Manifest, Plugin},
-    smith::{Git, Smith},
+    smith::{DynSmith, Git},
 };
 use error_stack::{Context, IntoReport, Result, ResultExt};
 use rayon::prelude::*;
@@ -51,7 +51,7 @@ fn main() -> error_stack::Result<(), MainError> {
     //    println!("data-path {}", data_dir);
     //    println!("cache-path {}", cache_dir);
 
-    let smiths = vec![Git::create()];
+    let smiths: Vec<Box<dyn DynSmith>> = vec![Box::new(Git::new())];
 
     let config_path = "packages.json";
     let data_path = std::env::current_dir()
@@ -179,7 +179,7 @@ fn main() -> error_stack::Result<(), MainError> {
 }
 
 fn load_plugin(
-    smiths: &Vec<Box<dyn Smith>>,
+    smiths: &[Box<dyn DynSmith>],
     plugin: &Plugin,
     manifest: &Manifest,
     alpacka_path: &PathBuf,
@@ -219,7 +219,7 @@ fn load_plugin(
     }
 
     smith
-        .load(&plugin.loader_data, &package_path)
+        .load_dyn(plugin.loader_data.as_ref(), &package_path)
         .attach_printable_lazy(|| {
             format!(
                 "Failed to load package. Package name: {}, Package path: {}",
@@ -294,7 +294,7 @@ fn load_plugin(
 }
 
 fn generate_manifest(
-    smiths: &[Box<dyn Smith>],
+    smiths: &[Box<dyn DynSmith>],
     generations: &mut GenerationsFile,
     config: Config,
     alpacka_path: &Path,
@@ -346,7 +346,7 @@ fn generate_manifest(
 }
 
 fn create_manifest_from_config(
-    smiths: &[Box<dyn Smith>],
+    smiths: &[Box<dyn DynSmith>],
     config: Config,
 ) -> Result<Manifest, MainError> {
     let packages = config
@@ -407,7 +407,7 @@ fn create_manifest_from_config(
                     .clone()
                     .unwrap_or("".to_string()),
                 smith: package.smith.clone(),
-                loader_data: Box::new(loader_data),
+                loader_data,
             };
 
             Ok(plugin)

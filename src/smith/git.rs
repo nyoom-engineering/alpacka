@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{any::Any, fmt::Display, path::Path};
 use tracing::debug;
 
-use super::{LoadError, LoaderInput, ResolveError, Smith};
+use super::{LoadError, LoaderInput, ResolveError, Smith, UpcastAny};
 
 #[derive(Debug)]
 enum GitError {
@@ -38,13 +38,19 @@ pub struct Git {
 impl Git {
     #[must_use]
     /// Create a new git smith with the default clone type
-    pub fn create() -> Box<dyn Smith> {
-        Self::create_with_type(CloneType::default())
+    pub fn new() -> Self {
+        Self::new_with_type(CloneType::default())
     }
 
     #[must_use]
-    pub fn create_with_type(clone_type: CloneType) -> Box<dyn Smith> {
-        Box::new(Self { clone_type })
+    pub const fn new_with_type(clone_type: CloneType) -> Self {
+        Self { clone_type }
+    }
+}
+
+impl Default for Git {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -67,25 +73,22 @@ pub struct LoaderType {
 }
 
 #[typetag::serde]
-impl LoaderInput for LoaderType {
-    fn any(&self) -> Box<dyn Any> {
-        Box::new(self.clone())
-    }
-}
+impl LoaderInput for LoaderType {}
 
-#[typetag::serde]
-impl LoaderInput for Box<LoaderType> {
-    fn any(&self) -> Box<dyn Any> {
-        Box::new(self.clone())
+impl UpcastAny for LoaderType {
+    fn upcast_any_ref(&self) -> &dyn Any {
+        self as &dyn Any
     }
 }
 
 impl Smith for Git {
+    type Input = LoaderType;
+
     fn name(&self) -> String {
         "git".to_string()
     }
 
-    fn resolve(&self, package: &Package) -> Result<Box<dyn LoaderInput>, ResolveError> {
+    fn resolve(&self, package: &Package) -> Result<Self::Input, ResolveError> {
         let Some((repo_type, repo_url)) = package
                 .name
                 .split_once(':') else {
@@ -170,21 +173,13 @@ impl Smith for Git {
             .id()
             .to_string();
 
-        Ok(Box::new(LoaderType {
+        Ok(LoaderType {
             commit_hash,
             remote: url,
-        }))
+        })
     }
 
-    fn load(&self, input: &dyn LoaderInput, path: &Path) -> Result<(), LoadError> {
-        let input = input
-            .any()
-            .downcast::<LoaderType>()
-            .map_err(|_| LoadError)
-            .into_report()
-            .attach_printable_lazy(|| format!("Failed to downcast input to LoaderType: {input:?}"))
-            .change_context(LoadError)?;
-
+    fn load(&self, input: &Self::Input, path: &Path) -> Result<(), LoadError> {
         let repo = match git2::Repository::open(path) {
             Ok(repo) => repo,
             Err(e) => match e.code() {
