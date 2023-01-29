@@ -116,6 +116,14 @@ impl Smith for Git {
                 CloneType::Ssh => format!("git@github.com:{repo_url}"),
                 CloneType::Https => format!("https://github.com/{repo_url}.git"),
             },
+            ("gitlab", repo_url) => match self.clone_type {
+                CloneType::Ssh => format!("git@gitlab.com:{repo_url}"),
+                CloneType::Https => format!("https://gitlab.com/{repo_url}.git"),
+            },
+            ("srht", repo_url) => match self.clone_type {
+                CloneType::Ssh => format!("git@git.sr.ht:{repo_url}"),
+                CloneType::Https => format!("https://git.sr.ht/{repo_url}"),
+            },
             _ => unreachable!("should be handled by handles_package"),
         };
 
@@ -230,8 +238,10 @@ impl Smith for Git {
 
     fn get_package_name(&self, name: &str) -> Option<String> {
         match name.split_once(':') {
-            Some(("github", name)) => name.split_once('/').map(|(_, name)| name.to_string()),
             Some(("git", name)) => name.rsplit_once('/').map(|(_, name)| name.to_string()),
+            Some(("github", name)) => name.split_once('/').map(|(_, name)| name.to_string()),
+            Some(("gitlab", name)) => name.split_once('/').map(|(_, name)| name.to_string()),
+            Some(("srht", name)) => name.split_once('/').map(|(_, name)| name.to_string()),
             _ => None,
         }
     }
