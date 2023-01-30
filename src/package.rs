@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use error_stack::{IntoReport, Result, ResultExt};
 use serde::{Deserialize, Serialize};
 
-use crate::smith::{DynSmith, LoaderInput, ResolveError};
+use crate::smith::{DynSmith, ResolveError, SerializeLoaderInput};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 /// A package declaration, as found in a config file
@@ -50,7 +50,7 @@ impl WithSmith {
     pub fn resolve(
         &self,
         smiths: &[Box<dyn DynSmith>],
-    ) -> Result<Box<dyn LoaderInput>, ResolveError> {
+    ) -> Result<Box<dyn SerializeLoaderInput>, ResolveError> {
         let smith = smiths
             .iter()
             .find(|smith| smith.name() == self.smith)

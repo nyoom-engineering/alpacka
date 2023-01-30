@@ -1,5 +1,7 @@
 mod git;
 pub use git::Git;
+use rkyv::Archived;
+use rkyv_dyn::archive_dyn;
 use std::{
     any::Any,
     fmt::{Debug as FmtDebug, Display},
@@ -7,7 +9,9 @@ use std::{
 };
 
 use crate::package::Package;
-use error_stack::{Context, IntoReport, Result, ResultExt};
+use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
+
+use self::git::LoaderType;
 
 #[derive(Debug)]
 pub struct ResolveError;
@@ -33,11 +37,19 @@ impl Context for LoadError {}
 
 /// A marker trait for loader inputs.
 /// This trait is used to allow the loader input to be serialized and deserialized.
-#[typetag::serde(tag = "loader")]
+#[archive_dyn(deserialize)]
 pub trait LoaderInput: FmtDebug + Send + Sync + UpcastAny {}
+
+impl LoaderInput for Archived<LoaderType> {}
 
 pub trait UpcastAny {
     fn upcast_any_ref(&self) -> &dyn Any;
+}
+
+impl UpcastAny for Archived<LoaderType> {
+    fn upcast_any_ref(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// A smith that can be used to resolve and load a package.
@@ -46,7 +58,7 @@ pub trait UpcastAny {
 /// 1. A resolver that can resolve a config package to a loader package, which has all the necessary information to load the package. This is cached inside of the generation file.
 /// 2. A loader that can download and install the package, and run the build script.
 pub trait Smith: FmtDebug + Send + Sync {
-    type Input: LoaderInput;
+    type Input: LoaderInput + SerializeLoaderInput;
 
     /// Gets the name of the smith
     fn name(&self) -> String;
@@ -60,14 +72,14 @@ pub trait Smith: FmtDebug + Send + Sync {
     ///
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
-    fn resolve(&self, package: &Package) -> Result<Self::Input, ResolveError>;
+    fn resolve(&self, package: &Package) -> ErrorStackResult<Self::Input, ResolveError>;
 
     /// Loads a package.
     /// This downloads and installs the package to the given directory.
     ///
     /// # Errors
     /// This function will return an error if the package cannot be loaded.
-    fn load(&self, input: &Self::Input, package_path: &Path) -> Result<(), LoadError>;
+    fn load(&self, input: &Self::Input, package_path: &Path) -> ErrorStackResult<(), LoadError>;
 }
 
 /// "dyn friendly" version of the smith trait, which removes the concrete associated type.
@@ -87,14 +99,21 @@ pub trait DynSmith: Send + Sync {
     ///
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
-    fn resolve_dyn(&self, package: &Package) -> Result<Box<dyn LoaderInput>, ResolveError>;
+    fn resolve_dyn(
+        &self,
+        package: &Package,
+    ) -> ErrorStackResult<Box<dyn SerializeLoaderInput>, ResolveError>;
 
     /// Loads a package.
     /// This downloads and installs the package to the given directory.
     ///
     /// # Errors
     /// This function will return an error if the package cannot be loaded or if the loader input is the wrong type.
-    fn load_dyn(&self, input: &dyn LoaderInput, package_path: &Path) -> Result<(), LoadError>;
+    fn load_dyn(
+        &self,
+        input: &dyn SerializeLoaderInput,
+        package_path: &Path,
+    ) -> ErrorStackResult<(), LoadError>;
 }
 
 impl<T: Smith> DynSmith for T
@@ -109,12 +128,19 @@ where
         Smith::get_package_name(self, package)
     }
 
-    fn resolve_dyn(&self, name: &Package) -> Result<Box<dyn LoaderInput>, ResolveError> {
+    fn resolve_dyn(
+        &self,
+        name: &Package,
+    ) -> ErrorStackResult<Box<dyn SerializeLoaderInput>, ResolveError> {
         let input = Smith::resolve(self, name)?;
         Ok(Box::new(input))
     }
 
-    fn load_dyn(&self, input: &dyn LoaderInput, package_path: &Path) -> Result<(), LoadError> {
+    fn load_dyn(
+        &self,
+        input: &dyn SerializeLoaderInput,
+        package_path: &Path,
+    ) -> ErrorStackResult<(), LoadError> {
         input.upcast_any_ref().downcast_ref().map_or_else(
             || {
                 Err(LoadError)

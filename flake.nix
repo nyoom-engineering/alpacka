@@ -22,24 +22,23 @@
     };
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , crane
-    , flake-utils
-    , advisory-db
-    , rust-overlay
-    , ...
-    }:
-    flake-utils.lib.eachDefaultSystem (system:
-    let
+  outputs = {
+    self,
+    nixpkgs,
+    crane,
+    flake-utils,
+    advisory-db,
+    rust-overlay,
+    ...
+  }:
+    flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [ (import rust-overlay) ];
+        overlays = [(import rust-overlay)];
       };
 
       rustToolchain = pkgs.pkgsBuildHost.rust-bin.stable.latest.default.override {
-        extensions = [ "rust-src" "rust-analyzer" ];
+        extensions = ["rust-src" "rust-analyzer"];
       };
 
       inherit (pkgs) lib;
@@ -71,8 +70,7 @@
       my-crate = craneLib.buildPackage {
         inherit cargoArtifacts src buildInputs;
       };
-    in
-    {
+    in {
       checks = {
         # Build the crate as part of `nix flake check` for convenience
         inherit my-crate;
