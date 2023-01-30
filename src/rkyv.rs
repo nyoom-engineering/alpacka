@@ -49,3 +49,22 @@ impl<D: Fallible + ?Sized> Deserialize<StringPathBuf, D> for ArchivedString {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_string_path_buf_deref() {
+        let spb = StringPathBuf::new(Path::new("/tmp/test.txt").to_path_buf());
+        let pb: &PathBuf = &spb;
+        assert_eq!(pb, &Path::new("/tmp/test.txt").to_path_buf());
+    }
+
+    #[test]
+    fn test_string_path_buf_new() {
+        let spb = StringPathBuf::new(Path::new("/tmp/test.txt").to_path_buf());
+        assert_eq!(spb.inner, Path::new("/tmp/test.txt").to_path_buf());
+    }
+}
