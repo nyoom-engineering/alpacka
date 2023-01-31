@@ -1,5 +1,5 @@
 {
-  description = "Nyoom Cli";
+  description = "Alpacka: A generational package manager for neovim";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -22,23 +22,24 @@
     };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    crane,
-    flake-utils,
-    advisory-db,
-    rust-overlay,
-    ...
-  }:
-    flake-utils.lib.eachDefaultSystem (system: let
+  outputs =
+    { self
+    , nixpkgs
+    , crane
+    , flake-utils
+    , advisory-db
+    , rust-overlay
+    , ...
+    }:
+    flake-utils.lib.eachDefaultSystem (system:
+    let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [(import rust-overlay)];
+        overlays = [ (import rust-overlay) ];
       };
 
       rustToolchain = pkgs.pkgsBuildHost.rust-bin.stable.latest.default.override {
-        extensions = ["rust-src" "rust-analyzer"];
+        extensions = [ "rust-src" "rust-analyzer" ];
       };
 
       inherit (pkgs) lib;
@@ -67,13 +68,14 @@
 
       # Build the actual crate itself, reusing the dependency
       # artifacts from above.
-      my-crate = craneLib.buildPackage {
+      alpacka = craneLib.buildPackage {
         inherit cargoArtifacts src buildInputs;
       };
-    in {
+    in
+    {
       checks = {
         # Build the crate as part of `nix flake check` for convenience
-        inherit my-crate;
+        inherit alpacka;
 
         # Run clippy (and deny all warnings) on the crate source,
         # again, resuing the dependency artifacts from above.
@@ -81,39 +83,39 @@
         # Note that this is done as a separate derivation so that
         # we can block the CI if there are issues here, but not
         # prevent downstream consumers from building our crate by itself.
-        my-crate-clippy = craneLib.cargoClippy {
+        alpacka-clippy = craneLib.cargoClippy {
           inherit cargoArtifacts src buildInputs;
           cargoClippyExtraArgs = "--all-targets -- --deny warnings";
         };
 
-        my-crate-doc = craneLib.cargoDoc {
+        alpacka-doc = craneLib.cargoDoc {
           inherit cargoArtifacts src buildInputs;
         };
 
         # Check formatting
-        my-crate-fmt = craneLib.cargoFmt {
+        alpacka-fmt = craneLib.cargoFmt {
           inherit src;
         };
 
         # Audit dependencies
-        my-crate-audit = craneLib.cargoAudit {
+        alpacka-audit = craneLib.cargoAudit {
           inherit src advisory-db;
         };
 
         # Run tests with cargo-nextest
         # Consider setting `doCheck = false` on `my-crate` if you do not want
         # the tests to run twice
-        my-crate-nextest = craneLib.cargoNextest {
+        alpacka-nextest = craneLib.cargoNextest {
           inherit cargoArtifacts src buildInputs;
           partitions = 1;
           partitionType = "count";
         };
       };
 
-      packages.default = my-crate;
+      packages.default = alpacka;
 
       apps.default = flake-utils.lib.mkApp {
-        drv = my-crate;
+        drv = alpacka;
       };
 
       devShells.default = pkgs.mkShell {

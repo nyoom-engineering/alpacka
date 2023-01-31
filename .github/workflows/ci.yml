@@ -1,10 +1,30 @@
-on: [push, pull_request]
-name: Continuous Integration
+# Continuous integration for alpacka
+# We do this using nix but just to check out of a nix env (and pretty print)
+name: "cargo checks"
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - 'main'
+      - 'ci*' # Allow testing CI fixes without opening a PR
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # cargo format is cheap tp run so lets run it first
+  cargo_fmt:
+    name: cargo format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mtoohey31/cache-flake-attrs@v2
+        with:
+          key: ${{ runner.os }}-nix-${{ hashFiles('./flake.lock', './flake.nix') }}
+      - run: nix --extra-experimental-features nix-command --extra-experimental-features flakes develop -c cargo fmt --all -- --check
+
+  # check if code builds
   cargo_check:
     name: cargo check
     needs: cargo_fmt
@@ -25,6 +45,7 @@ jobs:
       - uses: rui314/setup-mold@v1
       - run: nix --extra-experimental-features nix-command --extra-experimental-features flakes develop -c cargo hack check --feature-powerset --all
 
+  # check for code quality
   cargo_clippy:
     name: cargo clippy
     needs: [cargo_fmt, cargo_check]
@@ -43,17 +64,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: rui314/setup-mold@v1
       - run: nix --extra-experimental-features nix-command --extra-experimental-features flakes develop -c cargo clippy --all-features -- -D warnings
-
-  cargo_fmt:
-    name: cargo format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: mtoohey31/cache-flake-attrs@v2
-        with:
-          key: ${{ runner.os }}-nix-${{ hashFiles('./flake.lock', './flake.nix') }}
-      - run: nix --extra-experimental-features nix-command --extra-experimental-features flakes develop -c cargo fmt --all -- --check
-  
+ 
+  # check if code *should* work
   cargo_test:
     name: cargo test
     needs: [cargo_fmt, cargo_check]

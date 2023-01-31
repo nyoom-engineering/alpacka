@@ -1,3 +1,6 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 use alpacka::{
     config::Config,
     manifest::{GenerationsFile, Manifest, Plugin},
@@ -11,7 +14,6 @@ use std::{
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
     io::{BufRead, BufReader},
-    ops::Deref,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
@@ -32,36 +34,16 @@ impl Context for MainError {}
 fn main() -> error_stack::Result<(), MainError> {
     tracing_subscriber::fmt::init();
 
-    let smiths: Vec<Box<dyn DynSmith>> = vec![Box::new(Git::new())];
-
     let config_dir = std::env::var_os("XDG_CONFIG_HOME")
         .and_then(dirs_sys::is_absolute_path)
         .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
     let config_path = config_dir.map(|cd| cd.join("nvim/packages.json")).unwrap();
-    let config_file = std::fs::File::open(config_path)
-        .into_report()
-        .attach_printable_lazy(|| format!("Failed to open config file"))
-        .change_context(MainError)?;
-    let config: Config = serde_json::from_reader(config_file)
-        .into_report()
-        .attach_printable_lazy(|| format!("Failed to parse config file"))
-        .change_context(MainError)?;
-
-    info!("Config loaded, checking for existing manifest");
-
-    let config_hash = {
-        let mut hasher = DefaultHasher::new();
-        config.hash(&mut hasher);
-        hasher.finish()
-    };
-
     let data_dir = std::env::var_os("XDG_DATA_HOME")
         .and_then(dirs_sys::is_absolute_path)
         .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
     let data_path = data_dir
         .map(|dd| dd.join("nvim/site/pack/alpacka/"))
         .unwrap();
-    let generation_path = data_path.join("generations.rkyv");
 
     if !data_path.exists() {
         std::fs::create_dir_all(&data_path)
@@ -75,6 +57,30 @@ fn main() -> error_stack::Result<(), MainError> {
             .change_context(MainError)?;
     }
 
+    load_alpacka(&data_path, config_path)?;
+    Ok(())
+}
+
+fn load_alpacka(data_path: &PathBuf, config_path: PathBuf) -> Result<(), MainError> {
+    let config_file = std::fs::File::open(config_path)
+        .into_report()
+        .attach_printable_lazy(|| "Failed to open config file".to_string())
+        .change_context(MainError)?;
+    let config: Config = serde_json::from_reader(config_file)
+        .into_report()
+        .attach_printable_lazy(|| "Failed to parse config file".to_string())
+        .change_context(MainError)?;
+
+    info!("Config loaded, checking for existing manifest");
+
+    let config_hash = {
+        let mut hasher = DefaultHasher::new();
+        config.hash(&mut hasher);
+        hasher.finish()
+    };
+
+    let smiths: Vec<Box<dyn DynSmith>> = vec![Box::new(Git::new())];
+    let generation_path = data_path.join("generations.rkyv");
     let manifest = if generation_path.exists() {
         let generations_file = std::fs::read(&generation_path)
             .into_report()
@@ -103,7 +109,7 @@ fn main() -> error_stack::Result<(), MainError> {
                     "Found generation with the same hash as the current config, loading manifest"
                 );
 
-                let manifest_file = std::fs::read(manifest.path.deref())
+                let manifest_file = std::fs::read(&*manifest.path)
                     .into_report()
                     .attach_printable_lazy(|| {
                         format!(
@@ -132,8 +138,8 @@ fn main() -> error_stack::Result<(), MainError> {
             None => generate_manifest(
                 &smiths,
                 &mut generations,
-                config,
-                &data_path,
+                &config,
+                data_path,
                 &generation_path,
                 config_hash,
             ),
@@ -142,8 +148,8 @@ fn main() -> error_stack::Result<(), MainError> {
         generate_manifest(
             &smiths,
             &mut GenerationsFile::new(),
-            config,
-            &data_path,
+            &config,
+            data_path,
             &generation_path,
             config_hash,
         )
@@ -154,7 +160,7 @@ fn main() -> error_stack::Result<(), MainError> {
     manifest
         .plugins
         .par_iter()
-        .map(|plugin| load_plugin(&smiths, plugin, &manifest, &data_path))
+        .map(|plugin| load_plugin(&smiths, plugin, &manifest, data_path))
         .collect::<Result<_, _>>()?;
 
     Ok(())
@@ -278,7 +284,7 @@ fn load_plugin(
 fn generate_manifest(
     smiths: &[Box<dyn DynSmith>],
     generations: &mut GenerationsFile,
-    config: Config,
+    config: &Config,
     data_path: &Path,
     generation_path: &Path,
     config_hash: u64,
@@ -329,7 +335,7 @@ fn generate_manifest(
 
 fn create_manifest_from_config(
     smiths: &[Box<dyn DynSmith>],
-    config: Config,
+    config: &Config,
 ) -> Result<Manifest, MainError> {
     let packages = config
         .create_package_list(smiths)

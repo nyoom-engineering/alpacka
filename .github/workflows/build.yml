@@ -1,0 +1,87 @@
+# built against standard cargo
+name: "cargo build and publish"
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - 'main'
+      - 'ci*' # Allow testing CI fixes without opening a PR
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: build alpacka
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --profile optimized
+      - name: upload alpacka binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: "alpacka-linux-x86_64"
+          path: "target/optimized/alpacka"
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Install dependencies
+        run: brew install openssl
+      - uses: actions/checkout@v2
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: build apacka
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --profile optimized
+      - name: upload alpacka x86 mac binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: "alpacka-macos-x86_64"
+          path: "target/optimized/alpacka"
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-m1:
+    runs-on: macos-latest
+    steps:
+      - name: Install dependencies
+        run: brew install openssl
+      - uses: actions/checkout@v2
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-apple-darwin
+          profile: minimal
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: build alpacka
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --profile optimized --target aarch64-apple-darwin
+      - name: upload alpacka aarch64 binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: "alpacka-macos-aarch64"
+          path: "target/aarch64-apple-darwin/optimized/alpacka"
+          if-no-files-found: error
+          retention-days: 7
