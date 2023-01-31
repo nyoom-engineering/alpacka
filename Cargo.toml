@@ -12,20 +12,43 @@ edition = "2021"
 
 [dependencies]
 bytecheck = "0.6.9"
+dirs-sys = "0.3.7"
 error-stack = "0.2.4"
 git2 = "0.16.1"
+ptr_meta = "0.1.4"
 rayon = "1.6.1"
-serde = { version = "1.0.152", features = ["derive"] }
-serde_json = "1.0.91"
 rkyv = { version = "0.7.39", features = ["validation"] }
 rkyv_dyn = { version = "0.7.39", features = ["validation"] }
-tempfile = "3.3.0"
-tracing = "0.1.37"
-tracing-subscriber = "0.3.16"
 rkyv_typename = "0.7.33"
-ptr_meta = "0.1.4"
+serde_json = "1.0.91"
+tempfile = "3.3.0"
 
 [patch.crates-io]
 rkyv = { git = "https://github.com/rkyv/rkyv", branch = "rkyv_dyn_error_box" }
 rkyv_dyn = { git = "https://github.com/rkyv/rkyv", branch = "rkyv_dyn_error_box" }
 rkyv_typename = { git = "https://github.com/rkyv/rkyv", branch = "rkyv_dyn_error_box" }
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = false
+
+[dependencies.tracing]
+version = "0.1"
+features = []
+optional = false
+
+[dependencies.tracing-subscriber]
+version = "0.3"
+optional = false
+
+[[bin]]
+name = "alpacka"
+path = "src/main.rs"
+
+[profile.optimized]
+inherits = "release"
+opt-level = "z"
+strip = true
+lto = true
+codegen-units = 1

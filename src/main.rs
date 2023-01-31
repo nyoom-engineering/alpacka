@@ -1,5 +1,3 @@
-//! WIP impl of alpacka
-
 use alpacka::{
     config::Config,
     manifest::{GenerationsFile, Manifest, Plugin},
@@ -11,7 +9,6 @@ use rkyv::from_bytes;
 use std::{
     collections::hash_map::DefaultHasher,
     fmt::{Display, Formatter},
-    fs::read,
     hash::{Hash, Hasher},
     io::{BufRead, BufReader},
     ops::Deref,
@@ -35,70 +32,51 @@ impl Context for MainError {}
 fn main() -> error_stack::Result<(), MainError> {
     tracing_subscriber::fmt::init();
 
-    //    let config_dir = std::env::var_os("XDG_CONFIG_HOME")
-    //        .and_then(dirs_sys::is_absolute_path)
-    //        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
-    //    let data_dir = std::env::var_os("XDG_DATA_HOME")
-    //        .and_then(dirs_sys::is_absolute_path)
-    //        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
-    //    let cache_dir = std::env::var_os("XDG_CACHE_HOME")
-    //        .and_then(dirs_sys::is_absolute_path)
-    //        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".cache")));
-    //
-    //    let alpacka_config = Path::new(&config_dir).join("nvim/packages.json");
-    //    let alpacka_data = Path::new(&data_dir).join("nvim/site/pack/alpacka");
-    //    let alpacka_cache = Path::new(&cache_dir).join("nvim");
-    //
-    //    println!("config-path {}", config_dir);
-    //    println!("data-path {}", data_dir);
-    //    println!("cache-path {}", cache_dir);
-
     let smiths: Vec<Box<dyn DynSmith>> = vec![Box::new(Git::new())];
 
-    let config_path = "packages.json";
-    let data_path = std::env::current_dir()
-        .into_report()
-        .attach_printable_lazy(|| "Failed to get current directory. Current directory")
-        .change_context(MainError)?
-        .join("pack");
-
+    let config_dir = std::env::var_os("XDG_CONFIG_HOME")
+        .and_then(dirs_sys::is_absolute_path)
+        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
+    let config_path = config_dir.map(|cd| cd.join("nvim/packages.json")).unwrap();
     let config_file = std::fs::File::open(config_path)
         .into_report()
-        .attach_printable_lazy(|| {
-            format!("Failed to open config file. Config file path: {config_path}")
-        })
+        .attach_printable_lazy(|| format!("Failed to open config file"))
         .change_context(MainError)?;
-
     let config: Config = serde_json::from_reader(config_file)
         .into_report()
-        .attach_printable_lazy(|| {
-            format!("Failed to parse config file. Config file path: {config_path}")
-        })
+        .attach_printable_lazy(|| format!("Failed to parse config file"))
         .change_context(MainError)?;
 
     info!("Config loaded, checking for existing manifest");
 
-    let mut hasher = DefaultHasher::new();
-    config.hash(&mut hasher);
-    let config_hash = hasher.finish();
-    let alpacka_path = data_path.join("alpacka");
+    let config_hash = {
+        let mut hasher = DefaultHasher::new();
+        config.hash(&mut hasher);
+        hasher.finish()
+    };
 
-    let generation_path = alpacka_path.join("generations.rkyv");
+    let data_dir = std::env::var_os("XDG_DATA_HOME")
+        .and_then(dirs_sys::is_absolute_path)
+        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
+    let data_path = data_dir
+        .map(|dd| dd.join("nvim/site/pack/alpacka/"))
+        .unwrap();
+    let generation_path = data_path.join("generations.rkyv");
 
-    if !alpacka_path.exists() {
-        std::fs::create_dir_all(&alpacka_path)
+    if !data_path.exists() {
+        std::fs::create_dir_all(&data_path)
             .into_report()
             .attach_printable_lazy(|| {
                 format!(
                     "Failed to create alpacka directory. Alpacka directory path: {}",
-                    alpacka_path.display()
+                    data_path.display()
                 )
             })
             .change_context(MainError)?;
     }
 
     let manifest = if generation_path.exists() {
-        let generations_file = read(&generation_path)
+        let generations_file = std::fs::read(&generation_path)
             .into_report()
             .attach_printable_lazy(|| {
                 format!(
@@ -125,7 +103,7 @@ fn main() -> error_stack::Result<(), MainError> {
                     "Found generation with the same hash as the current config, loading manifest"
                 );
 
-                let manifest_file = read(manifest.path.deref())
+                let manifest_file = std::fs::read(manifest.path.deref())
                     .into_report()
                     .attach_printable_lazy(|| {
                         format!(
@@ -155,7 +133,7 @@ fn main() -> error_stack::Result<(), MainError> {
                 &smiths,
                 &mut generations,
                 config,
-                &alpacka_path,
+                &data_path,
                 &generation_path,
                 config_hash,
             ),
@@ -165,7 +143,7 @@ fn main() -> error_stack::Result<(), MainError> {
             &smiths,
             &mut GenerationsFile::new(),
             config,
-            &alpacka_path,
+            &data_path,
             &generation_path,
             config_hash,
         )
@@ -176,7 +154,7 @@ fn main() -> error_stack::Result<(), MainError> {
     manifest
         .plugins
         .par_iter()
-        .map(|plugin| load_plugin(&smiths, plugin, &manifest, &alpacka_path))
+        .map(|plugin| load_plugin(&smiths, plugin, &manifest, &data_path))
         .collect::<Result<_, _>>()?;
 
     Ok(())
@@ -186,7 +164,7 @@ fn load_plugin(
     smiths: &[Box<dyn DynSmith>],
     plugin: &Plugin,
     manifest: &Manifest,
-    alpacka_path: &PathBuf,
+    data_path: &PathBuf,
 ) -> Result<(), MainError> {
     for dep in &plugin.dependencies {
         let dep = manifest
@@ -199,7 +177,7 @@ fn load_plugin(
                 format!("Failed to find dependency. Dependency name: {dep}")
             })?;
 
-        load_plugin(smiths, dep, manifest, alpacka_path)?;
+        load_plugin(smiths, dep, manifest, data_path)?;
     }
 
     let smith = smiths
@@ -208,7 +186,7 @@ fn load_plugin(
         .ok_or(MainError)
         .into_report()
         .attach_printable_lazy(|| format!("Failed to find smith. Smith name: {}", plugin.smith))?;
-    let mut package_path = alpacka_path.clone();
+    let mut package_path = data_path.clone();
 
     if plugin.optional {
         package_path = package_path.join("opt");
@@ -301,7 +279,7 @@ fn generate_manifest(
     smiths: &[Box<dyn DynSmith>],
     generations: &mut GenerationsFile,
     config: Config,
-    alpacka_path: &Path,
+    data_path: &Path,
     generation_path: &Path,
     config_hash: u64,
 ) -> Result<Manifest, MainError> {
@@ -320,7 +298,7 @@ fn generate_manifest(
     let manifest = create_manifest_from_config(smiths, config)?;
 
     info!("Saving generation file");
-    let manifest_path = alpacka_path.join(format!("manifest-{}.rkyv", &generation_hash));
+    let manifest_path = data_path.join(format!("manifest-{}.rkyv", &generation_hash));
     manifest
         .save_to_file(&manifest_path)
         .into_report()
