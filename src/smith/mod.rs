@@ -78,7 +78,7 @@ pub trait Smith: FmtDebug + Send + Sync {
     ///
     /// # Errors
     /// This function will return an error if it cannot find the commits
-    fn get_latest_commits(
+    fn get_change_log(
         &self,
         old_sha: Option<git2::Oid>,
         path: &Path,

@@ -222,11 +222,13 @@ impl Smith for Git {
     /// // sha of 0.1.0
     /// let oid = git2::Oid::from_str("90600fc317747afad28add17705199fc1eead17c").unwrap();
     ///
-    /// let commits = smith.get_latest_commits(Some(oid), &curr_dir).unwrap();
+    /// let commits = smith.get_change_log(Some(oid), &curr_dir).unwrap();
     ///
     /// assert_eq!(commits[0], "Update README.md");
+    ///
+    /// std::fs::remove_dir_all(&curr_dir);
     /// ```
-    fn get_latest_commits(
+    fn get_change_log(
         &self,
         old_sha: Option<git2::Oid>,
         path: &Path,
