@@ -74,6 +74,10 @@ pub trait Smith: FmtDebug + Send + Sync {
     /// This function will return an error if the package cannot be resolved.
     fn resolve(&self, package: &Package) -> ErrorStackResult<Self::Input, ResolveError>;
 
+    /// Get latest commits for a git repo,
+    ///
+    /// # Errors
+    /// This function will return an error if it cannot find the commits
     fn get_latest_commits(
         &self,
         old_sha: Option<git2::Oid>,
