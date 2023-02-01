@@ -195,6 +195,122 @@ impl Smith for Git {
         })
     }
 
+    /// Gets the commit messages between a sha and the current HEAD, if not sha is provided, it
+    /// takes up to 5 of the latest commits on the current branch, provided they exist.
+    ///
+    /// ```
+    /// use alpacka::smith::{Smith, Git};
+    /// use std::path::Path;
+    ///
+    /// let curr_dir = std::env::current_dir().unwrap();
+    ///
+    /// let smith = Git::new();
+    ///
+    /// let oid = git2::Oid::from_str("61d7eb89d55231a3e292ce2e21a86a6188e3ef87").unwrap();
+    ///
+    /// let commits = smith.get_latest_commits(Some(oid), &curr_dir).unwrap();
+    ///
+    /// assert_eq!(commits[0], "test: add sample test for rkyv");
+    /// ```
+    fn get_latest_commits(
+        &self,
+        old_sha: Option<git2::Oid>,
+        path: &Path,
+    ) -> ErrorStackResult<Vec<String>, LoadError> {
+        let repo = match git2::Repository::open(path) {
+            Ok(repo) => repo,
+            Err(e) => {
+                return Err(e)
+                    .into_report()
+                    .change_context(GitError::GitError)
+                    .attach_printable_lazy(|| format!("Failed to open repo: {:?}", path))
+                    .change_context(LoadError)
+            }
+        };
+
+        let mut revwalk = repo
+            .revwalk()
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to get revwalk"))
+            .change_context(LoadError)?;
+        revwalk
+            .set_sorting(git2::Sort::TOPOLOGICAL)
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to set revwalk sorting"))
+            .change_context(LoadError)?;
+
+        let head = repo
+            .head()
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| {
+                format!("Failed to get current HEAD for repository: {:?}", path)
+            })
+            .change_context(LoadError)?;
+
+        let branch = head
+            .peel_to_commit()
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| {
+                format!("Failed to get current branch for repository: {:?}", path)
+            })
+            .change_context(LoadError)?;
+
+        revwalk
+            .push(branch.id())
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to push commit to revwalk: {:?}", path))
+            .change_context(LoadError)?;
+        match old_sha {
+            Some(sha) => {
+                let commit = repo
+                    .find_commit(sha)
+                    .into_report()
+                    .change_context(GitError::GitError)
+                    .attach_printable_lazy(|| format!("Failed to get commit"))
+                    .change_context(LoadError)?;
+
+                revwalk
+                    .hide(commit.id())
+                    .into_report()
+                    .change_context(GitError::GitError)
+                    .attach_printable_lazy(|| {
+                        format!("Failed to push commit to revwalk {:?}", path)
+                    })
+                    .change_context(LoadError)?;
+            }
+            None => {}
+        }
+
+        let mut messages = vec![];
+        let mut count = 0;
+        for id in revwalk.take(5) {
+            let commit_id = id
+                .into_report()
+                .change_context(GitError::GitError)
+                .attach_printable_lazy(|| format!("Failed to get revwalk"))
+                .change_context(LoadError)?;
+
+            let commit = repo
+                .find_commit(commit_id)
+                .into_report()
+                .change_context(GitError::GitError)
+                .attach_printable_lazy(|| format!("Failed to get revwalk"))
+                .change_context(LoadError)?;
+            messages.push(commit.message().unwrap_or("").to_string());
+            count += 1;
+            if old_sha.is_none() && count == 5 {
+                break;
+            }
+        }
+
+        Ok(messages.iter().map(|m| m.trim().to_string()).collect())
+    }
+
     fn load(&self, input: &Self::Input, path: &Path) -> ErrorStackResult<(), LoadError> {
         let repo = match git2::Repository::open(path) {
             Ok(repo) => repo,
