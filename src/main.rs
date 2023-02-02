@@ -192,6 +192,7 @@ fn load_plugin(
         .ok_or(MainError)
         .into_report()
         .attach_printable_lazy(|| format!("Failed to find smith. Smith name: {}", plugin.smith))?;
+
     let mut package_path = data_path.clone();
 
     if plugin.optional {

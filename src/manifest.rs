@@ -27,7 +27,7 @@ impl Ord for Generation {
 /// A file which contains a list of all the generations
 /// The key is the config hash and the generation number
 /// The value is the path to the generation
-#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug)]
+#[derive(Archive, PartialEq, rkyv::Serialize, rkyv::Deserialize, Debug)]
 #[archive_attr(derive(TypeName, Debug, CheckBytes))]
 pub struct GenerationsFile(pub BTreeMap<u64, Generation>);
 
@@ -154,4 +154,74 @@ pub struct Plugin {
     pub build: String,
     /// The data which is used for the loader
     pub loader_data: Box<dyn SerializeLoaderInput>,
+}
+
+#[cfg(test)]
+mod tests {
+    use rkyv::to_bytes;
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn test_generation_serialize_deserialize() {
+        let generation = Generation {
+            generation: 1,
+            path: StringPathBuf::new(PathBuf::from("file1.txt")),
+        };
+
+        let bytes = to_bytes::<_, 1024>(&generation).unwrap();
+        let deserialized = rkyv::from_bytes::<Generation>(&bytes).unwrap();
+        assert_eq!(generation, deserialized);
+    }
+
+    #[test]
+    fn test_generations_file_serialize_deserialize() {
+        let mut generations_file = GenerationsFile::new();
+        generations_file.add_to_generation(1, PathBuf::from("file1.txt"));
+
+        let bytes = to_bytes::<_, 1024>(&generations_file).unwrap();
+        let deserialized = rkyv::from_bytes::<GenerationsFile>(&bytes).unwrap();
+        assert_eq!(generations_file, deserialized);
+    }
+
+    #[test]
+    fn test_get_next_generation_number() {
+        let mut generations_file = GenerationsFile::new();
+        assert_eq!(generations_file.get_next_generation_number(0), 1);
+        generations_file.add_to_generation(0, PathBuf::from("manifest_path"));
+        assert_eq!(generations_file.get_next_generation_number(0), 2);
+    }
+
+    #[test]
+    fn test_get_latest_generation() {
+        let mut generations_file = GenerationsFile::new();
+        let latest_generation = generations_file.get_latest_generation(0);
+        assert!(latest_generation.is_none());
+
+        generations_file.add_to_generation(0, PathBuf::from("manifest_path"));
+        let latest_generation = generations_file.get_latest_generation(0).unwrap();
+        assert_eq!(latest_generation.generation, 1);
+        assert_eq!(latest_generation.path.to_str(), Some("manifest_path"));
+
+        generations_file.add_to_generation(0, PathBuf::from("manifest_path2"));
+        let latest_generation = generations_file.get_latest_generation(0).unwrap();
+        assert_eq!(latest_generation.generation, 2);
+        assert_eq!(latest_generation.path.to_str(), Some("manifest_path2"));
+    }
+
+    #[test]
+    fn test_get_latest_generation_number() {
+        let mut generations_file = GenerationsFile::new();
+        let latest_generation = generations_file.get_latest_generation_number(0);
+        assert!(latest_generation.is_none());
+
+        generations_file.add_to_generation(0, PathBuf::from("manifest_path"));
+        let latest_generation = generations_file.get_latest_generation_number(0).unwrap();
+        assert_eq!(latest_generation, 1);
+
+        generations_file.add_to_generation(0, PathBuf::from("manifest_path2"));
+        let latest_generation = generations_file.get_latest_generation_number(0).unwrap();
+        assert_eq!(latest_generation, 2);
+    }
 }
