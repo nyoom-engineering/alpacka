@@ -63,7 +63,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Install dependencies
-        run: brew install openssl
+        run: brew install openssl git
       - uses: actions/checkout@v2
       - name: install rust
         uses: actions-rs/toolchain@v1
