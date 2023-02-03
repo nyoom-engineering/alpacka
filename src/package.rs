@@ -1,11 +1,9 @@
 //! A module which contains structs and types for packages
 
-use std::collections::BTreeMap;
-
+use crate::smith::{DynSmith, ResolveError, SerializeLoaderInput};
 use error_stack::{IntoReport, Result, ResultExt};
 use serde::{Deserialize, Serialize};
-
-use crate::smith::{DynSmith, ResolveError, SerializeLoaderInput};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 /// A package declaration, as found in a config file
@@ -59,5 +57,29 @@ impl WithSmith {
             .attach_printable_lazy(|| format!("Smith {} not found", self.smith))?;
 
         smith.resolve_dyn(&self.package)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_with_smith_is_optional() {
+        let with_smith = WithSmith {
+            smith: "test".to_string(),
+            package: Package {
+                name: "test".to_string(),
+                package: Config {
+                    optional: Some(true),
+                    version: None,
+                    rename: None,
+                    build: None,
+                    dependencies: None,
+                },
+            },
+        };
+
+        assert!(with_smith.is_optional());
     }
 }
