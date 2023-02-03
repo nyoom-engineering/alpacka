@@ -177,7 +177,7 @@ impl Smith for Git {
             .find_reference("FETCH_HEAD")
             .into_report()
             .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {url}"))
+            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {url}. This is most likely because the reference does not exist."))
             .change_context(ResolveError)?;
 
         let commit_hash = fetch_head
@@ -422,6 +422,13 @@ fn fetch_remote(
                 .change_context(ResolveError)?;
         }
         LockType::Default => {
+            remote
+                .connect(git2::Direction::Fetch)
+                .into_report()
+                .change_context(GitError::GitError)
+                .attach_printable_lazy(|| format!("Failed to connect to remote: {url}"))
+                .change_context(ResolveError)?;
+
             let default_branch = remote
                 .default_branch()
                 .into_report()
@@ -438,9 +445,7 @@ fn fetch_remote(
 
             remote
                 .fetch(
-                    &[&format!(
-                        "refs/heads/{default_branch_name}:refs/heads/{default_branch_name}"
-                    )],
+                    &[&format!("{default_branch_name}:{default_branch_name}")],
                     None,
                     None,
                 )

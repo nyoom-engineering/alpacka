@@ -1,82 +1,29 @@
 use bytecheck::CheckBytes;
-use rkyv::{to_bytes, Archive};
+use rkyv::{to_bytes, Archive, Deserialize, Infallible};
 use rkyv_typename::TypeName;
 use std::{collections::BTreeMap, io::Write, path::PathBuf};
 
-use crate::{rkyv::StringPathBuf, smith::SerializeLoaderInput};
+use crate::smith::SerializeLoaderInput;
 
-#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug, PartialEq, Eq)]
-#[archive_attr(derive(Debug, CheckBytes))]
-pub struct Generation {
-    pub generation: u64,
-    pub path: StringPathBuf,
-}
-
-impl PartialOrd for Generation {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Generation {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.generation.cmp(&other.generation)
-    }
-}
+#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[archive_attr(derive(TypeName, CheckBytes, Eq, PartialEq, PartialOrd, Ord))]
+/// A hash of the config file
+///
+/// The first value is the hash of the config file
+/// The second value is the generation number
+pub struct GenerationHash(pub u64, pub u64);
 
 /// A file which contains a list of all the generations
 /// The key is the config hash and the generation number
 /// The value is the path to the generation
 #[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug)]
-#[archive_attr(derive(TypeName, Debug, CheckBytes))]
-pub struct GenerationsFile(pub BTreeMap<u64, Generation>);
+#[archive_attr(derive(TypeName, CheckBytes))]
+pub struct GenerationsFile(pub BTreeMap<GenerationHash, Manifest>);
 
 impl GenerationsFile {
     #[must_use]
     pub const fn new() -> Self {
         Self(BTreeMap::new())
-    }
-
-    pub fn add_to_generation(&mut self, config_hash: u64, manifest_path: PathBuf) {
-        let generation = self
-            .0
-            .iter()
-            .filter(|(hash, _)| **hash == config_hash)
-            .map(|(_, generation)| generation.generation)
-            .max()
-            .unwrap_or(0)
-            + 1;
-
-        self.0.insert(
-            config_hash,
-            Generation {
-                generation,
-                path: StringPathBuf::new(manifest_path),
-            },
-        );
-    }
-
-    #[must_use]
-    pub fn get_latest_generation(&self, config_hash: u64) -> Option<&Generation> {
-        self.0
-            .iter()
-            .filter(|(hash, _)| **hash == config_hash)
-            .map(|(_, gen)| gen)
-            .max()
-    }
-
-    #[must_use]
-    pub fn get_latest_generation_number(&self, config_hash: u64) -> Option<u64> {
-        self.0
-            .iter()
-            .filter(|(hash, _)| **hash == config_hash)
-            .map(|(_, gen)| gen.generation)
-            .max()
-    }
-
-    #[must_use]
-    pub fn get_next_generation_number(&self, config_hash: u64) -> u64 {
-        self.get_latest_generation_number(config_hash).unwrap_or(0) + 1
     }
 
     /// Save the generations file to a file
@@ -94,12 +41,93 @@ impl GenerationsFile {
 
         Ok(())
     }
+
+    pub fn add_to_generations(&mut self, config_hash: u64, manifest: Manifest) {
+        let generation_number = self
+            .0
+            .keys()
+            .filter(|GenerationHash(hash, _)| *hash == config_hash)
+            .max_by_key(|GenerationHash(_, generation)| generation)
+            .map(|GenerationHash(_, generation)| generation)
+            .copied()
+            .unwrap_or(0)
+            + 1;
+
+        self.0
+            .insert(GenerationHash(config_hash, generation_number), manifest);
+    }
+
+    pub fn get_latest_manifest(&self, config_hash: u64) -> Option<&Manifest> {
+        self.0
+            .iter()
+            .find_map(|(GenerationHash(hash, _), manifest)| {
+                if *hash == config_hash {
+                    Some(manifest)
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl Default for GenerationsFile {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[must_use]
+pub fn get_latest_manifest(
+    generation_file: &ArchivedGenerationsFile,
+    config_hash: u64,
+) -> Option<&ArchivedManifest> {
+    generation_file
+        .0
+        .iter()
+        .find_map(|(ArchivedGenerationHash(hash, _), manifest)| {
+            if *hash == config_hash {
+                Some(manifest)
+            } else {
+                None
+            }
+        })
+}
+
+#[must_use]
+pub fn get_latest_generation_number(
+    generation_file: &ArchivedGenerationsFile,
+    config_hash: u64,
+) -> Option<u64> {
+    generation_file
+        .0
+        .keys()
+        .filter(|ArchivedGenerationHash(hash, _)| *hash == config_hash)
+        .max_by_key(|ArchivedGenerationHash(_, generation)| generation)
+        .map(|ArchivedGenerationHash(_, generation)| generation)
+        .copied()
+}
+
+#[must_use]
+pub fn get_next_generation_number(
+    generation_file: &ArchivedGenerationsFile,
+    config_hash: u64,
+) -> u64 {
+    get_latest_generation_number(generation_file, config_hash).unwrap_or(0) + 1
+}
+
+pub fn add_to_generations(
+    generation_file: &ArchivedGenerationsFile,
+    config_hash: u64,
+    manifest: Manifest,
+) -> GenerationsFile {
+    let mut generations: GenerationsFile = generation_file.deserialize(&mut Infallible).unwrap();
+
+    let generation = get_next_generation_number(generation_file, config_hash);
+    generations
+        .0
+        .insert(GenerationHash(config_hash, generation), manifest);
+
+    generations
 }
 
 #[derive(Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
@@ -142,11 +170,15 @@ impl Manifest {
 pub struct Plugin {
     /// The plugin's name
     pub name: String,
+    /// The plugin's unresolved name
+    /// This is the name that is used in the config file
+    /// This is used to resolve dependencies
+    pub unresolved_name: String,
     /// Rename the plugin to this name when loading
     pub rename: Option<String>,
     /// If the plugin is optional
     pub optional: bool,
-    /// The plugin's dependencies, as a list of plugin names
+    /// The plugin's dependencies, as a list of plugin names. These are the non-resolved names
     pub dependencies: Vec<String>,
     /// the name of the loader this plugin is loaded by
     pub smith: String,
