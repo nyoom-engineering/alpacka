@@ -16,7 +16,7 @@ pub struct GenerationHash(pub u64, pub u64);
 /// A file which contains a list of all the generations
 /// The key is the config hash and the generation number
 /// The value is the path to the generation
-#[derive(Archive, PartialEq, rkyv::Serialize, rkyv::Deserialize, Debug)]
+#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug)]
 #[archive_attr(derive(TypeName, CheckBytes))]
 pub struct GenerationsFile(pub BTreeMap<GenerationHash, Manifest>);
 
@@ -190,12 +190,9 @@ pub struct Plugin {
 
 #[cfg(test)]
 mod tests {
-    use rkyv::to_bytes;
-    use std::path::PathBuf;
-
-    use super::*;
-
-    // TODO: Fix these tests
+    // use rkyv::to_bytes;
+    // use std::path::PathBuf;
+    // use super::*;
     // #[test]
     // fn test_generation_serialize_deserialize() {
     //     let generation = Generation {
