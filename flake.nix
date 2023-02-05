@@ -73,8 +73,13 @@
       };
     in {
       checks = {
-        # Build the crate as part of `nix flake check` for convenience
-        inherit alpacka;
+        # Build the crate as part of `nix flake check` for convenience, with tests
+        # sandboxing must be disabled
+        # since nextest doesn't support doctests yet, we are not using it.
+        alpacka = craneLib.buildPackage {
+          inherit cargoArtifacts src buildInputs;
+          doCheck = true;
+        };
 
         # Run clippy (and deny all warnings) on the crate source,
         # again, resuing the dependency artifacts from above.
@@ -100,16 +105,6 @@
         alpacka-audit = craneLib.cargoAudit {
           inherit src advisory-db;
         };
-
-        # Run tests with cargo-nextest
-        # Consider setting `doCheck = false` on `my-crate` if you do not want
-        # the tests to run twice
-        # Since the tests require internet access, nix can't run them
-        # alpacka-nextest = craneLib.cargoNextest {
-        #   inherit cargoArtifacts src buildInputs;
-        #   partitions = 1;
-        #   partitionType = "count";
-        # };
       };
 
       packages.default = alpacka;

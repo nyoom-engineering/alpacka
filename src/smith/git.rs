@@ -225,7 +225,7 @@ impl Smith for Git {
     ///
     /// let pkg = smith.resolve(&Package {
     ///     name: "github:zackartz/testing_repo".to_string(),
-    ///     package: Config {
+    ///     config_package: Config {
     ///         version: Some("tag:0.1.1".to_string()),
     ///         build: None,
     ///         dependencies: BTreeMap::new(),
