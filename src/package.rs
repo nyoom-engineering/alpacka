@@ -25,24 +25,29 @@ pub struct Config {
 #[derive(Debug, Clone)]
 /// A package declaration, as found in a config file plus some additional information
 pub struct Package {
+    /// The name of the package
     pub name: String,
-    pub package: Config,
+    /// The package's config, as found in the config file
+    pub config_package: Config,
 }
 
 #[derive(Debug, Clone)]
 /// A package declaration and a smith name used to handle said package
 pub struct WithSmith {
+    /// The name of the smith used to handle this package
     pub smith: String,
+    /// The package to be handled
     pub package: Package,
 }
 
-pub type PackageWithSerializer = (Box<dyn SerializeLoaderInput>, WithSmith);
+/// A type alias for a package loader input and a package with a smith
+pub type WithLoaderInput = (Box<dyn SerializeLoaderInput>, WithSmith);
 
 impl WithSmith {
     /// Check if this package is optional
     #[must_use]
     pub fn is_optional(&self) -> bool {
-        self.package.package.optional.unwrap_or(false)
+        self.package.config_package.optional.unwrap_or(false)
     }
 
     /// Resolve a package to a loader package, which has all the necessary information to load the package.
@@ -63,19 +68,26 @@ impl WithSmith {
         smith.resolve_dyn(&self.package)
     }
 
+    /// Recursively resolve a package to a loader package, which has all the necessary information to load the package.
+    /// This function will also resolve all dependencies of the package.
+    ///
+    /// See [`WithSmith::resolve`] for more information.
+    ///
+    /// # Errors
+    /// This function will return an error if the package or one of its dependencies cannot be resolved.
     pub fn resolve_recurse(
         self,
         smiths: &[Box<dyn DynSmith>],
-    ) -> Result<Vec<PackageWithSerializer>, ResolveError> {
+    ) -> Result<Vec<WithLoaderInput>, ResolveError> {
         let mut deps = self
             .package
-            .package
+            .config_package
             .dependencies
             .par_iter()
             .map(|dep| {
                 let pkg = Package {
                     name: dep.0.clone(),
-                    package: dep.1.clone(),
+                    config_package: dep.1.clone(),
                 };
 
                 let smith_to_use = smiths
@@ -87,7 +99,7 @@ impl WithSmith {
                         format!("Failed to find smith. Package name: {}", pkg.name)
                     })?;
 
-                let package = WithSmith {
+                let package = Self {
                     smith: smith_to_use.name(),
                     package: pkg,
                 };
@@ -135,7 +147,7 @@ mod tests {
             smith: "test".to_string(),
             package: Package {
                 name: "test".to_string(),
-                package: Config {
+                config_package: Config {
                     optional: Some(true),
                     version: None,
                     rename: None,

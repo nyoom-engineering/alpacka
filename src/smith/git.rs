@@ -4,7 +4,7 @@ use crate::{
 };
 use bytecheck::CheckBytes;
 use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
-use rkyv::Archive;
+use rkyv::{Archive, Archived};
 use rkyv_dyn::archive_dyn;
 use rkyv_typename::TypeName;
 use serde::{Deserialize, Serialize};
@@ -89,6 +89,13 @@ impl UpcastAny for LoaderType {
     }
 }
 
+impl LoaderInput for Archived<LoaderType> {}
+impl UpcastAny for Archived<LoaderType> {
+    fn upcast_any_ref(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl Smith for Git {
     type Input = LoaderType;
 
@@ -138,7 +145,7 @@ impl Smith for Git {
         debug!("url: {url}");
 
         let lock_type = match package
-            .package
+            .config_package
             .version
             .as_ref()
             .and_then(|v| v.split_once(':'))

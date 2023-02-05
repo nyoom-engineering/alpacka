@@ -3,8 +3,7 @@
 use alpacka::{
     config::Config,
     manifest::{
-        add_to_generations, get_latest_manifest, ArchivedGenerationsFile, GenerationsFile,
-        Manifest, Plugin,
+        add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Manifest, Plugin,
     },
     smith::{DynSmith, Git},
 };
@@ -122,7 +121,7 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), MainError>
             })?;
 
         // find generation that have the same hash as the current config, and the highest generation
-        get_latest_manifest(generations, config_hash).map_or_else(
+        get_latest(generations, config_hash).map_or_else(
             || create_manifest_from_config(&smiths, &config, &generation_path, Some(generations)),
             |manifest| {
                 info!(
@@ -286,17 +285,22 @@ fn create_manifest_from_config(
                         )
                     })?,
                 unresolved_name: package.package.name,
-                rename: package.package.package.rename.clone(),
-                optional: package.package.package.optional.unwrap_or(false),
+                rename: package.package.config_package.rename.clone(),
+                optional: package.package.config_package.optional.unwrap_or(false),
                 dependencies: package
                     .package
-                    .package
+                    .config_package
                     .dependencies
                     .clone()
                     .keys()
                     .cloned()
                     .collect(),
-                build: package.package.package.build.clone().unwrap_or_default(),
+                build: package
+                    .package
+                    .config_package
+                    .build
+                    .clone()
+                    .unwrap_or_default(),
                 smith: package.smith.clone(),
                 loader_data,
             };

@@ -1,3 +1,6 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Alpacka: the next-generation package manager for neovim.
 //!
 //! The library version of alpacka is designed to be used by other programs to interact and run the alpacka package manager.
