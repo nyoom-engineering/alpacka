@@ -6,8 +6,7 @@ use alpacka::{
         add_to_generations, get_latest_manifest, ArchivedGenerationsFile, GenerationsFile,
         Manifest, Plugin,
     },
-    package::{Package, WithSmith},
-    smith::{DynSmith, Git, SerializeLoaderInput},
+    smith::{DynSmith, Git},
 };
 use error_stack::{Context, IntoReport, Result, ResultExt};
 use rayon::prelude::*;
@@ -214,7 +213,7 @@ fn load_plugin(
             let stdout = threads.spawn(move || -> Result<(), MainError> {
                 for line in stdout.lines() {
                     let line = line.into_report().change_context(MainError)?;
-                    info!("STDOUT {}: {}", plugin.name, line);
+                    info!("STDOUT from {}: {}", plugin.name, line);
                 }
 
                 Ok(())
@@ -223,7 +222,7 @@ fn load_plugin(
             let stderr = threads.spawn(move || -> Result<(), MainError> {
                 for line in stderr.lines() {
                     let line = line.into_report().change_context(MainError)?;
-                    warn!("STDOUT {}: {}", plugin.name, line);
+                    warn!("STDERR from {}: {}", plugin.name, line);
                 }
 
                 Ok(())
@@ -253,8 +252,10 @@ fn create_manifest_from_config(
     info!("packages created, resolving");
     let resolved_packages = packages
         .into_par_iter()
-        .map(|package| resolve_package(smiths, package))
-        .collect::<Result<Vec<_>, _>>()?
+        .map(|package| package.resolve_recurse(smiths))
+        .collect::<Result<Vec<_>, _>>()
+        .change_context(MainError)
+        .attach_printable_lazy(|| "Failed to resolve packages!")?
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
@@ -292,7 +293,6 @@ fn create_manifest_from_config(
                     .package
                     .dependencies
                     .clone()
-                    .unwrap_or_default()
                     .keys()
                     .cloned()
                     .collect(),
@@ -312,14 +312,18 @@ fn create_manifest_from_config(
 
     info!("resolved manifest, saving");
 
-    let mut hasher = DefaultHasher::new();
-    config.hash(&mut hasher);
-    let hash = hasher.finish();
+    let hash = {
+        let mut hasher = DefaultHasher::new();
+        config.hash(&mut hasher);
+        hasher.finish()
+    };
 
     let new_generations_file = if let Some(generations) = generations {
         add_to_generations(generations, hash, manifest)
     } else {
-        GenerationsFile(BTreeMap::new())
+        let mut gen_file = GenerationsFile(BTreeMap::new());
+        gen_file.add_to_generations(hash, manifest);
+        gen_file
     };
 
     // overwrite the generations file
@@ -348,6 +352,8 @@ fn create_manifest_from_config(
         })
         .change_context(MainError)?;
 
+    info!("generations file saved, getting latest manifest");
+
     let manifest = new_generations_file
         .0
         .into_iter()
@@ -358,70 +364,4 @@ fn create_manifest_from_config(
         .change_context(MainError)?;
 
     Ok(manifest.1)
-}
-
-type PackageWithSerializer = (Box<dyn SerializeLoaderInput>, WithSmith);
-
-fn resolve_package(
-    smiths: &[Box<dyn DynSmith>],
-    package: WithSmith,
-) -> Result<Vec<PackageWithSerializer>, MainError> {
-    let mut deps = package.package.package.dependencies.as_ref();
-    let none_map = BTreeMap::new();
-    if deps.is_none() {
-        deps = Some(&none_map);
-    }
-
-    let mut deps = deps
-        .unwrap()
-        .par_iter()
-        .map(|dep| {
-            let pkg = Package {
-                name: dep.0.clone(),
-                package: dep.1.clone(),
-            };
-
-            let smith_to_use = smiths
-                .iter()
-                .find(|s| s.get_package_name(&pkg.name).is_some())
-                .ok_or(MainError)
-                .into_report()
-                .attach_printable_lazy(|| {
-                    format!("Failed to find smith. Package name: {}", pkg.name)
-                })?;
-
-            let package = WithSmith {
-                smith: smith_to_use.name(),
-                package: pkg,
-            };
-
-            resolve_package(smiths, package)
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-
-    let smith_to_use = smiths
-        .iter()
-        .find(|s| s.name() == package.smith)
-        .ok_or(MainError)
-        .into_report()
-        .attach_printable_lazy(|| format!("Failed to find smith. Smith name: {}", package.smith))?;
-
-    let loader_data = smith_to_use
-        .resolve_dyn(&package.package)
-        .attach_printable_lazy(|| {
-            format!(
-                "Failed to resolve package. Package name: {}",
-                package.package.name
-            )
-        })
-        .change_context(MainError)?;
-
-    let final_package = (loader_data, package);
-    let mut final_vec = vec![final_package];
-    final_vec.append(&mut deps);
-
-    Ok(final_vec)
 }

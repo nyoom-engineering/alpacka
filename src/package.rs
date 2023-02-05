@@ -2,6 +2,7 @@
 
 use crate::smith::{DynSmith, ResolveError, SerializeLoaderInput};
 use error_stack::{IntoReport, Result, ResultExt};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -17,7 +18,8 @@ pub struct Config {
     /// A command to build the package. This is run in the package directory
     pub build: Option<String>,
     /// A list of dependencies
-    pub dependencies: Option<BTreeMap<String, Config>>,
+    #[serde(default)]
+    pub dependencies: BTreeMap<String, Config>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +35,8 @@ pub struct WithSmith {
     pub smith: String,
     pub package: Package,
 }
+
+pub type PackageWithSerializer = (Box<dyn SerializeLoaderInput>, WithSmith);
 
 impl WithSmith {
     /// Check if this package is optional
@@ -58,6 +62,67 @@ impl WithSmith {
 
         smith.resolve_dyn(&self.package)
     }
+
+    pub fn resolve_recurse(
+        self,
+        smiths: &[Box<dyn DynSmith>],
+    ) -> Result<Vec<PackageWithSerializer>, ResolveError> {
+        let mut deps = self
+            .package
+            .package
+            .dependencies
+            .par_iter()
+            .map(|dep| {
+                let pkg = Package {
+                    name: dep.0.clone(),
+                    package: dep.1.clone(),
+                };
+
+                let smith_to_use = smiths
+                    .iter()
+                    .find(|s| s.get_package_name(&pkg.name).is_some())
+                    .ok_or(ResolveError)
+                    .into_report()
+                    .attach_printable_lazy(|| {
+                        format!("Failed to find smith. Package name: {}", pkg.name)
+                    })?;
+
+                let package = WithSmith {
+                    smith: smith_to_use.name(),
+                    package: pkg,
+                };
+
+                package.resolve_recurse(smiths)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let smith_to_use = smiths
+            .iter()
+            .find(|s| s.name() == self.smith)
+            .ok_or(ResolveError)
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!("Failed to find smith. Smith name: {}", self.smith)
+            })?;
+
+        let loader_data = smith_to_use
+            .resolve_dyn(&self.package)
+            .attach_printable_lazy(|| {
+                format!(
+                    "Failed to resolve package. Package name: {}",
+                    self.package.name
+                )
+            })
+            .change_context(ResolveError)?;
+
+        let mut final_package = vec![(loader_data, self)];
+        deps.append(&mut final_package);
+
+        Ok(deps)
+    }
 }
 
 #[cfg(test)]
@@ -75,7 +140,7 @@ mod tests {
                     version: None,
                     rename: None,
                     build: None,
-                    dependencies: None,
+                    dependencies: BTreeMap::new(),
                 },
             },
         };

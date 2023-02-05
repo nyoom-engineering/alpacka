@@ -177,7 +177,7 @@ impl Smith for Git {
             .find_reference("FETCH_HEAD")
             .into_report()
             .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {url}. This is most likely because the reference does not exist."))
+            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {url}. Check if the specified commit, tag, or branch exists."))
             .change_context(ResolveError)?;
 
         let commit_hash = fetch_head
@@ -201,6 +201,7 @@ impl Smith for Git {
     /// ```
     /// use alpacka::{package::{Package, Config}, smith::{Smith, Git}};
     /// use std::path::Path;
+    /// use std::collections::BTreeMap;
     ///
     /// let curr_dir = Path::new("testing");
     ///
@@ -211,7 +212,7 @@ impl Smith for Git {
     ///     package: Config {
     ///         version: Some("tag:0.1.1".to_string()),
     ///         build: None,
-    ///         dependencies: None,
+    ///         dependencies: BTreeMap::new(),
     ///         optional: None,
     ///         rename: None,
     ///     }
@@ -226,6 +227,7 @@ impl Smith for Git {
     ///
     /// assert_eq!(commits[0], "Update README.md");
     ///
+    /// // cleanup
     /// std::fs::remove_dir_all(&curr_dir);
     /// ```
     fn get_change_log(
@@ -250,6 +252,7 @@ impl Smith for Git {
             .change_context(GitError::GitError)
             .attach_printable_lazy(|| "Failed to get revwalk".to_string())
             .change_context(LoadError)?;
+
         revwalk
             .set_sorting(git2::Sort::TOPOLOGICAL)
             .into_report()

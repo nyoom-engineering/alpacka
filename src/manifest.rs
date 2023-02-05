@@ -5,7 +5,9 @@ use std::{collections::BTreeMap, io::Write, path::PathBuf};
 
 use crate::smith::SerializeLoaderInput;
 
-#[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Archive, rkyv::Serialize, rkyv::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy,
+)]
 #[archive_attr(derive(TypeName, CheckBytes, Eq, PartialEq, PartialOrd, Ord))]
 /// A hash of the config file
 ///
@@ -42,19 +44,13 @@ impl GenerationsFile {
         Ok(())
     }
 
-    pub fn add_to_generations(&mut self, config_hash: u64, manifest: Manifest) {
-        let generation_number = self
-            .0
-            .keys()
-            .filter(|GenerationHash(hash, _)| *hash == config_hash)
-            .max_by_key(|GenerationHash(_, generation)| generation)
-            .map(|GenerationHash(_, generation)| generation)
-            .copied()
-            .unwrap_or(0)
-            + 1;
+    pub fn add_to_generations(&mut self, config_hash: u64, manifest: Manifest) -> GenerationHash {
+        let generation_number = self.get_next_generation_number(config_hash);
+        let hash = GenerationHash(config_hash, generation_number);
 
-        self.0
-            .insert(GenerationHash(config_hash, generation_number), manifest);
+        self.0.insert(hash, manifest);
+
+        hash
     }
 
     pub fn get_latest_manifest(&self, config_hash: u64) -> Option<&Manifest> {
@@ -67,6 +63,19 @@ impl GenerationsFile {
                     None
                 }
             })
+    }
+
+    pub fn get_latest_generation_number(&self, config_hash: u64) -> Option<u64> {
+        self.0
+            .keys()
+            .filter(|GenerationHash(hash, _)| *hash == config_hash)
+            .max_by_key(|GenerationHash(_, generation)| generation)
+            .map(|GenerationHash(_, generation)| generation)
+            .copied()
+    }
+
+    pub fn get_next_generation_number(&self, config_hash: u64) -> u64 {
+        self.get_latest_generation_number(config_hash).unwrap_or(0) + 1
     }
 }
 
@@ -190,68 +199,52 @@ pub struct Plugin {
 
 #[cfg(test)]
 mod tests {
-    // use rkyv::to_bytes;
-    // use std::path::PathBuf;
-    // use super::*;
-    // #[test]
-    // fn test_generation_serialize_deserialize() {
-    //     let generation = Generation {
-    //         generation: 1,
-    //         path: StringPathBuf::new(PathBuf::from("file1.txt")),
-    //     };
+    use super::*;
+    use rkyv::to_bytes;
 
-    //     let bytes = to_bytes::<_, 1024>(&generation).unwrap();
-    //     let deserialized = rkyv::from_bytes::<Generation>(&bytes).unwrap();
-    //     assert_eq!(generation, deserialized);
-    // }
+    #[test]
+    fn test_generation_hash_serialize_deserialize() {
+        let generation = GenerationHash(123125124, 32);
 
-    // #[test]
-    // fn test_generations_file_serialize_deserialize() {
-    //     let mut generations_file = GenerationsFile::new();
-    //     generations_file.add_to_generation(1, PathBuf::from("file1.txt"));
+        let bytes = to_bytes::<_, 1024>(&generation).unwrap();
+        let deserialized = rkyv::from_bytes::<GenerationHash>(&bytes).unwrap();
+        assert_eq!(generation, deserialized);
+    }
 
-    //     let bytes = to_bytes::<_, 1024>(&generations_file).unwrap();
-    //     let deserialized = rkyv::from_bytes::<GenerationsFile>(&bytes).unwrap();
-    //     assert_eq!(generations_file, deserialized);
-    // }
+    #[test]
+    fn test_generations_file_serialize_deserialize() {
+        let mut generations_file = GenerationsFile::new();
+        let manifest = Manifest {
+            neovim_version: "0.5.0".to_string(),
+            plugins: vec![],
+        };
 
-    // #[test]
-    // fn test_get_next_generation_number() {
-    //     let mut generations_file = GenerationsFile::new();
-    //     assert_eq!(generations_file.get_next_generation_number(0), 1);
-    //     generations_file.add_to_generation(0, PathBuf::from("manifest_path"));
-    //     assert_eq!(generations_file.get_next_generation_number(0), 2);
-    // }
+        let hash = generations_file.add_to_generations(1, manifest);
 
-    // #[test]
-    // fn test_get_latest_generation() {
-    //     let mut generations_file = GenerationsFile::new();
-    //     let latest_generation = generations_file.get_latest_generation(0);
-    //     assert!(latest_generation.is_none());
+        let bytes = to_bytes::<_, 1024>(&generations_file).unwrap();
+        let deserialized = rkyv::from_bytes::<GenerationsFile>(&bytes).unwrap();
 
-    //     generations_file.add_to_generation(0, PathBuf::from("manifest_path"));
-    //     let latest_generation = generations_file.get_latest_generation(0).unwrap();
-    //     assert_eq!(latest_generation.generation, 1);
-    //     assert_eq!(latest_generation.path.to_str(), Some("manifest_path"));
+        let generations_file_manifest = generations_file.0.get(&hash).unwrap();
+        let deserialized_manifest = deserialized.0.get(&hash).unwrap();
 
-    //     generations_file.add_to_generation(0, PathBuf::from("manifest_path2"));
-    //     let latest_generation = generations_file.get_latest_generation(0).unwrap();
-    //     assert_eq!(latest_generation.generation, 2);
-    //     assert_eq!(latest_generation.path.to_str(), Some("manifest_path2"));
-    // }
+        assert_eq!(
+            generations_file_manifest.neovim_version,
+            deserialized_manifest.neovim_version
+        );
+    }
 
-    // #[test]
-    // fn test_get_latest_generation_number() {
-    //     let mut generations_file = GenerationsFile::new();
-    //     let latest_generation = generations_file.get_latest_generation_number(0);
-    //     assert!(latest_generation.is_none());
+    #[test]
+    fn test_get_next_generation_number() {
+        let mut generations_file = GenerationsFile::new();
+        let manifest = Manifest {
+            neovim_version: "0.5.0".to_string(),
+            plugins: vec![],
+        };
 
-    //     generations_file.add_to_generation(0, PathBuf::from("manifest_path"));
-    //     let latest_generation = generations_file.get_latest_generation_number(0).unwrap();
-    //     assert_eq!(latest_generation, 1);
+        assert_eq!(generations_file.get_next_generation_number(0), 1);
 
-    //     generations_file.add_to_generation(0, PathBuf::from("manifest_path2"));
-    //     let latest_generation = generations_file.get_latest_generation_number(0).unwrap();
-    //     assert_eq!(latest_generation, 2);
-    // }
+        generations_file.add_to_generations(0, manifest);
+
+        assert_eq!(generations_file.get_next_generation_number(0), 2);
+    }
 }
