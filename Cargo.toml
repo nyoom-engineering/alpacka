@@ -1,7 +1,7 @@
 [package]
 name = "alpacka"
 version = "0.1.0"
-description = "Cli-based package manager for neovim"
+description = "The next-generation package manager for neovim."
 repository = "https://github.com/nyoom-engineering/alpacka"
 readme = ".github/README.md"
 authors = ["Shaurya Singh <shaunsingh0207@gmail.com>", "Suyashtnt <suyashtnt@gmail.com>"]

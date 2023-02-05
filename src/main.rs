@@ -1,12 +1,14 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use alpacka::{
+    clap::Cli,
     config::Config,
     manifest::{
         add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Manifest, Plugin,
     },
     smith::{DynSmith, Git},
 };
+use clap::Parser;
 use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use rayon::prelude::*;
 use rkyv::{check_archived_root, to_bytes, Deserialize, Infallible};
@@ -51,20 +53,36 @@ fn main() -> error_stack::Result<(), MainError> {
         .with(error)
         .init();
 
-    let config_dir = std::env::var_os("XDG_CONFIG_HOME")
-        .and_then(dirs_sys::is_absolute_path)
-        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
+    let config = Cli::parse();
 
-    let config_path = config_dir.map(|cd| cd.join("nvim/packages.json")).unwrap();
+    match config {
+        Cli::Install { path, data_dir } => {
+            let config_path = path.unwrap_or_else(|| {
+                let config_dir = std::env::var_os("XDG_CONFIG_HOME")
+                    .and_then(dirs_sys::is_absolute_path)
+                    .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
 
-    let data_dir = std::env::var_os("XDG_DATA_HOME")
-        .and_then(dirs_sys::is_absolute_path)
-        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
+                config_dir.map(|cd| cd.join("nvim/packages.json")).unwrap()
+            });
 
-    let data_path = data_dir
-        .map(|dd| dd.join("nvim/site/pack/alpacka/"))
-        .unwrap();
+            let data_path = data_dir.unwrap_or_else(|| {
+                let data_dir = std::env::var_os("XDG_DATA_HOME")
+                    .and_then(dirs_sys::is_absolute_path)
+                    .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
 
+                data_dir
+                    .map(|dd| dd.join("nvim/site/pack/alpacka/"))
+                    .unwrap()
+            });
+
+            install(config_path, data_path)
+        }
+    }?;
+
+    Ok(())
+}
+
+fn install(config_path: PathBuf, data_path: PathBuf) -> Result<(), MainError> {
     if !data_path.exists() {
         std::fs::create_dir_all(&data_path)
             .into_report()
@@ -78,6 +96,7 @@ fn main() -> error_stack::Result<(), MainError> {
     }
 
     load_alpacka(&data_path, config_path)?;
+
     Ok(())
 }
 
