@@ -413,30 +413,10 @@ fn fetch_remote(
     lock_type: &LockType,
     remote: &mut git2::Remote,
 ) -> ErrorStackResult<(), GitError> {
-    match lock_type {
-        LockType::Tag(tag) => remote
-            .fetch(&[&format!("refs/tags/{tag}:refs/tags/{tag}")], None, None)
-            .into_report()
-            .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to fetch tag: {tag}"))?,
-        LockType::Commit(commit) => remote
-            .fetch(
-                &[&format!("refs/heads/{commit}:refs/heads/{commit}")],
-                None,
-                None,
-            )
-            .into_report()
-            .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to fetch commit: {commit}"))?,
-        LockType::Branch(branch) => remote
-            .fetch(
-                &[&format!("refs/heads/{branch}:refs/heads/{branch}")],
-                None,
-                None,
-            )
-            .into_report()
-            .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to fetch branch: {branch}"))?,
+    let what_to_fetch = match lock_type {
+        LockType::Tag(tag) => format!("refs/tags/{tag}:refs/tags/{tag}"),
+        LockType::Commit(commit) => format!("refs/heads/{commit}:refs/heads/{commit}"),
+        LockType::Branch(branch) => format!("refs/heads/{branch}:refs/heads/{branch}"),
         LockType::Default => {
             remote
                 .connect(git2::Direction::Fetch)
@@ -456,19 +436,15 @@ fn fetch_remote(
                 .into_report()
                 .attach_printable_lazy(|| format!("Failed to find default branch: {url}"))?;
 
-            remote
-                .fetch(
-                    &[&format!("{default_branch_name}:{default_branch_name}")],
-                    None,
-                    None,
-                )
-                .into_report()
-                .change_context(GitError::GitError)
-                .attach_printable_lazy(|| {
-                    format!("Failed to fetch default branch: {default_branch_name}")
-                })?;
+            format!("{default_branch_name}:{default_branch_name}")
         }
     };
+
+    remote
+        .fetch(&[what_to_fetch.as_str()], None, None)
+        .into_report()
+        .change_context(GitError::GitError)
+        .attach_printable_lazy(|| format!("Failed to fetch: {url}"))?;
 
     Ok(())
 }
