@@ -22,24 +22,23 @@
     };
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , crane
-    , flake-utils
-    , advisory-db
-    , rust-overlay
-    , ...
-    }:
-    flake-utils.lib.eachDefaultSystem (system:
-    let
+  outputs = {
+    self,
+    nixpkgs,
+    crane,
+    flake-utils,
+    advisory-db,
+    rust-overlay,
+    ...
+  }:
+    flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [ (import rust-overlay) ];
+        overlays = [(import rust-overlay)];
       };
 
       rustToolchain = pkgs.pkgsBuildHost.rust-bin.stable.latest.default.override {
-        extensions = [ "rust-src" "rust-analyzer" ];
+        extensions = ["rust-src" "rust-analyzer"];
       };
 
       inherit (pkgs) lib;
@@ -70,9 +69,9 @@
       # artifacts from above.
       alpacka = craneLib.buildPackage {
         inherit cargoArtifacts src buildInputs;
+        doCheck = false;
       };
-    in
-    {
+    in {
       checks = {
         # Build the crate as part of `nix flake check` for convenience
         inherit alpacka;
@@ -105,11 +104,12 @@
         # Run tests with cargo-nextest
         # Consider setting `doCheck = false` on `my-crate` if you do not want
         # the tests to run twice
-        alpacka-nextest = craneLib.cargoNextest {
-          inherit cargoArtifacts src buildInputs;
-          partitions = 1;
-          partitionType = "count";
-        };
+        # Since the tests require internet access, nix can't run them
+        # alpacka-nextest = craneLib.cargoNextest {
+        #   inherit cargoArtifacts src buildInputs;
+        #   partitions = 1;
+        #   partitionType = "count";
+        # };
       };
 
       packages.default = alpacka;
