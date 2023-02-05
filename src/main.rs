@@ -7,7 +7,7 @@ use alpacka::{
     },
     smith::{DynSmith, Git},
 };
-use error_stack::{Context, IntoReport, Result, ResultExt};
+use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use rayon::prelude::*;
 use rkyv::{check_archived_root, to_bytes, Deserialize, Infallible};
 use std::{
@@ -21,6 +21,7 @@ use std::{
     thread,
 };
 use tracing::{debug, error, info, warn};
+use tracing_subscriber::{fmt::format::PrettyFields, prelude::*};
 
 #[derive(Debug)]
 struct MainError;
@@ -34,6 +35,10 @@ impl Display for MainError {
 impl Context for MainError {}
 
 fn main() -> error_stack::Result<(), MainError> {
+    Report::set_color_mode(error_stack::fmt::ColorMode::Color);
+
+    let error = tracing_error::ErrorLayer::new(PrettyFields::new());
+
     // Setup logging, with pretty printing
     tracing_subscriber::fmt()
         .pretty()
@@ -42,6 +47,8 @@ fn main() -> error_stack::Result<(), MainError> {
                 .with_default_directive(tracing::Level::INFO.into())
                 .from_env_lossy(),
         )
+        .finish()
+        .with(error)
         .init();
 
     let config_dir = std::env::var_os("XDG_CONFIG_HOME")
@@ -238,6 +245,7 @@ fn load_plugin(
     Ok(())
 }
 
+#[tracing::instrument(skip(generations))]
 fn create_manifest_from_config(
     smiths: &[Box<dyn DynSmith>],
     config: &Config,

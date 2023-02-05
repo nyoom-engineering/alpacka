@@ -408,6 +408,7 @@ impl Smith for Git {
 ///
 /// # Errors
 /// Errors if the fetch fails
+#[tracing::instrument(skip(remote))]
 fn fetch_remote(
     url: &String,
     lock_type: &LockType,

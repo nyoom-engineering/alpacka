@@ -196,6 +196,7 @@ impl Manifest {
     ///
     /// # Errors
     /// This function will return an error if the file can't be created, or if the manifest can't be serialized
+    #[tracing::instrument]
     pub fn save_to_file(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let file = std::fs::File::create(path)?;
         let bytes = to_bytes::<_, 1024>(self)

@@ -131,14 +131,17 @@ impl<T: Smith> DynSmith for T
 where
     T::Input: 'static,
 {
+    #[tracing::instrument]
     fn name(&self) -> String {
         Smith::name(self)
     }
 
+    #[tracing::instrument]
     fn get_package_name(&self, package: &str) -> Option<String> {
         Smith::get_package_name(self, package)
     }
 
+    #[tracing::instrument]
     fn get_change_log(
         &self,
         old_sha: Option<git2::Oid>,
@@ -147,6 +150,7 @@ where
         Smith::get_change_log(self, old_sha, path)
     }
 
+    #[tracing::instrument]
     fn resolve_dyn(
         &self,
         name: &Package,
@@ -155,6 +159,7 @@ where
         Ok(Box::new(input))
     }
 
+    #[tracing::instrument]
     fn load_dyn(
         &self,
         input: &dyn SerializeLoaderInput,

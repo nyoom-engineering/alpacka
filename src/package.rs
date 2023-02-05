@@ -54,6 +54,7 @@ impl WithSmith {
     ///
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
+    #[tracing::instrument]
     pub fn resolve(
         &self,
         smiths: &[Box<dyn DynSmith>],
@@ -75,6 +76,7 @@ impl WithSmith {
     ///
     /// # Errors
     /// This function will return an error if the package or one of its dependencies cannot be resolved.
+    #[tracing::instrument]
     pub fn resolve_recurse(
         self,
         smiths: &[Box<dyn DynSmith>],
