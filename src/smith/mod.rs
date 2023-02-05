@@ -87,7 +87,7 @@ pub trait Smith: FmtDebug + Send + Sync {
 ///
 /// See the [Smith] trait for more information.
 #[allow(clippy::module_name_repetitions)]
-pub trait DynSmith: Send + Sync {
+pub trait DynSmith: Send + Sync + FmtDebug {
     /// Gets the name of the smith
     fn name(&self) -> String;
 

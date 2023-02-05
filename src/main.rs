@@ -146,6 +146,7 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), MainError>
     Ok(())
 }
 
+#[tracing::instrument]
 fn load_plugin(
     smiths: &[Box<dyn DynSmith>],
     plugin: &Plugin,

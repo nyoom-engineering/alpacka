@@ -111,6 +111,7 @@ impl Smith for Git {
         "git".to_string()
     }
 
+    #[tracing::instrument]
     fn resolve(&self, package: &Package) -> ErrorStackResult<Self::Input, ResolveError> {
         let Some((repo_type, repo_url)) = package
                 .name
@@ -245,6 +246,7 @@ impl Smith for Git {
     /// // cleanup
     /// std::fs::remove_dir_all(&curr_dir);
     /// ```
+    #[tracing::instrument]
     fn get_change_log(
         &self,
         old_sha: Option<git2::Oid>,
@@ -341,6 +343,7 @@ impl Smith for Git {
         Ok(messages.iter().map(|m| m.trim().to_string()).collect())
     }
 
+    #[tracing::instrument]
     fn load(&self, input: &Self::Input, path: &Path) -> ErrorStackResult<(), LoadError> {
         let repo = match git2::Repository::open(path) {
             Ok(repo) => repo,

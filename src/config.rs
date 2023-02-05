@@ -37,6 +37,7 @@ impl Config {
     ///
     /// # Errors
     /// This function will return an error if no loader can be found for a package
+    #[tracing::instrument]
     pub fn create_package_list(
         &self,
         smiths: &[Box<dyn DynSmith>],
