@@ -14,7 +14,9 @@ pub struct Config {
 }
 
 #[derive(Debug)]
+/// An error that can occur when creating a list of packages
 pub enum CreatePackageListError {
+    /// No loader found for a package
     NoLoaderFound(String),
 }
 
@@ -35,6 +37,7 @@ impl Config {
     ///
     /// # Errors
     /// This function will return an error if no loader can be found for a package
+    #[tracing::instrument]
     pub fn create_package_list(
         &self,
         smiths: &[Box<dyn DynSmith>],
@@ -44,7 +47,7 @@ impl Config {
         for (name, config_package) in &self.packages {
             let package = Package {
                 name: name.clone(),
-                package: config_package.clone(),
+                config_package: config_package.clone(),
             };
 
             let smith_idx = smiths

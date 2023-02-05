@@ -1,0 +1,16 @@
+{
+  "packages": {
+    "github:nyoom-engineering/nyoom.nvim": {
+      "opt": true,
+      "version": "branch:main",
+      "dependencies": {
+        "github:nyoom-engineering/oxocarbon.nvim": {}
+      }
+    },
+    "git:github.com:catppuccin/nvim": {
+      "version": "tag:v0.2.9",
+      "rename": "catppuccin",
+      "build": "echo 'hi'"
+    }
+  }
+}

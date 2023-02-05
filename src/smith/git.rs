@@ -4,7 +4,7 @@ use crate::{
 };
 use bytecheck::CheckBytes;
 use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
-use rkyv::Archive;
+use rkyv::{Archive, Archived};
 use rkyv_dyn::archive_dyn;
 use rkyv_typename::TypeName;
 use serde::{Deserialize, Serialize};
@@ -14,8 +14,11 @@ use tracing::debug;
 use super::{LoadError, LoaderInput, ResolveError, Smith, UpcastAny};
 
 #[derive(Debug)]
+/// An error that can occur when resolving a git package
 enum GitError {
+    /// An error occurred when running a libgit2 command
     GitError,
+    /// An IO error occurred
     IoError,
 }
 
@@ -31,14 +34,19 @@ impl Display for GitError {
 impl Context for GitError {}
 
 #[derive(Debug, Default, Clone)]
+/// The way to clone a git repository
 pub enum CloneType {
+    /// Clone using the ssh protocol
     Ssh,
+    /// Clone using the https protocol
     #[default]
     Https,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
+/// A smith that can be used to resolve and load a git package.
 pub struct Git {
+    /// The method to use when cloning the repository
     pub clone_type: CloneType,
 }
 
@@ -50,18 +58,14 @@ impl Git {
     }
 
     #[must_use]
+    /// Create a new git smith with the given clone type
     pub const fn new_with_type(clone_type: CloneType) -> Self {
         Self { clone_type }
     }
 }
 
-impl Default for Git {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Default)]
+/// The lock type for a git package
 pub enum LockType {
     /// Lock to a specific tag
     Tag(String),
@@ -70,13 +74,17 @@ pub enum LockType {
     /// Lock to a specific branch
     Branch(String),
     /// Lock to the default branch
+    #[default]
     Default,
 }
 
 #[derive(Debug, rkyv::Serialize, rkyv::Deserialize, Archive, Clone)]
 #[archive_attr(derive(CheckBytes, Debug, TypeName))]
+/// The input for a git loader
 pub struct LoaderType {
+    /// The commit hash to lock to
     commit_hash: String,
+    /// The remote to use
     remote: String,
 }
 
@@ -89,6 +97,13 @@ impl UpcastAny for LoaderType {
     }
 }
 
+impl LoaderInput for Archived<LoaderType> {}
+impl UpcastAny for Archived<LoaderType> {
+    fn upcast_any_ref(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl Smith for Git {
     type Input = LoaderType;
 
@@ -96,6 +111,7 @@ impl Smith for Git {
         "git".to_string()
     }
 
+    #[tracing::instrument]
     fn resolve(&self, package: &Package) -> ErrorStackResult<Self::Input, ResolveError> {
         let Some((repo_type, repo_url)) = package
                 .name
@@ -138,7 +154,7 @@ impl Smith for Git {
         debug!("url: {url}");
 
         let lock_type = match package
-            .package
+            .config_package
             .version
             .as_ref()
             .and_then(|v| v.split_once(':'))
@@ -171,13 +187,13 @@ impl Smith for Git {
             .attach_printable_lazy(|| format!("Failed to add remote: {url}"))
             .change_context(ResolveError)?;
 
-        fetch_remote(&url, &lock_type, &mut remote)?;
+        fetch_remote(&url, &lock_type, &mut remote).change_context(ResolveError)?;
 
         let fetch_head = repo
             .find_reference("FETCH_HEAD")
             .into_report()
             .change_context(GitError::GitError)
-            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {url}"))
+            .attach_printable_lazy(|| format!("Failed to find FETCH_HEAD: {url}. Check if the specified commit, tag, or branch exists."))
             .change_context(ResolveError)?;
 
         let commit_hash = fetch_head
@@ -201,6 +217,7 @@ impl Smith for Git {
     /// ```
     /// use alpacka::{package::{Package, Config}, smith::{Smith, Git}};
     /// use std::path::Path;
+    /// use std::collections::BTreeMap;
     ///
     /// let curr_dir = Path::new("testing");
     ///
@@ -208,10 +225,10 @@ impl Smith for Git {
     ///
     /// let pkg = smith.resolve(&Package {
     ///     name: "github:zackartz/testing_repo".to_string(),
-    ///     package: Config {
+    ///     config_package: Config {
     ///         version: Some("tag:0.1.1".to_string()),
     ///         build: None,
-    ///         dependencies: None,
+    ///         dependencies: BTreeMap::new(),
     ///         optional: None,
     ///         rename: None,
     ///     }
@@ -226,8 +243,10 @@ impl Smith for Git {
     ///
     /// assert_eq!(commits[0], "Update README.md");
     ///
+    /// // cleanup
     /// std::fs::remove_dir_all(&curr_dir);
     /// ```
+    #[tracing::instrument]
     fn get_change_log(
         &self,
         old_sha: Option<git2::Oid>,
@@ -250,6 +269,7 @@ impl Smith for Git {
             .change_context(GitError::GitError)
             .attach_printable_lazy(|| "Failed to get revwalk".to_string())
             .change_context(LoadError)?;
+
         revwalk
             .set_sorting(git2::Sort::TOPOLOGICAL)
             .into_report()
@@ -323,6 +343,7 @@ impl Smith for Git {
         Ok(messages.iter().map(|m| m.trim().to_string()).collect())
     }
 
+    #[tracing::instrument]
     fn load(&self, input: &Self::Input, path: &Path) -> ErrorStackResult<(), LoadError> {
         let repo = match git2::Repository::open(path) {
             Ok(repo) => repo,
@@ -383,64 +404,61 @@ impl Smith for Git {
     }
 }
 
+/// Fetches the remote repository
+///
+/// # Errors
+/// Errors if the fetch fails
 fn fetch_remote(
     url: &String,
     lock_type: &LockType,
     remote: &mut git2::Remote,
-) -> ErrorStackResult<(), ResolveError> {
+) -> ErrorStackResult<(), GitError> {
     match lock_type {
-        LockType::Tag(tag) => {
-            remote
-                .fetch(&[&format!("refs/tags/{tag}:refs/tags/{tag}")], None, None)
-                .into_report()
-                .change_context(GitError::GitError)
-                .attach_printable_lazy(|| format!("Failed to fetch tag: {tag}"))
-                .change_context(ResolveError)?;
-        }
-        LockType::Commit(commit) => {
-            remote
-                .fetch(
-                    &[&format!("refs/heads/{commit}:refs/heads/{commit}")],
-                    None,
-                    None,
-                )
-                .into_report()
-                .change_context(GitError::GitError)
-                .attach_printable_lazy(|| format!("Failed to fetch commit: {commit}"))
-                .change_context(ResolveError)?;
-        }
-        LockType::Branch(branch) => {
-            remote
-                .fetch(
-                    &[&format!("refs/heads/{branch}:refs/heads/{branch}")],
-                    None,
-                    None,
-                )
-                .into_report()
-                .change_context(GitError::GitError)
-                .attach_printable_lazy(|| format!("Failed to fetch branch: {branch}"))
-                .change_context(ResolveError)?;
-        }
+        LockType::Tag(tag) => remote
+            .fetch(&[&format!("refs/tags/{tag}:refs/tags/{tag}")], None, None)
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to fetch tag: {tag}"))?,
+        LockType::Commit(commit) => remote
+            .fetch(
+                &[&format!("refs/heads/{commit}:refs/heads/{commit}")],
+                None,
+                None,
+            )
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to fetch commit: {commit}"))?,
+        LockType::Branch(branch) => remote
+            .fetch(
+                &[&format!("refs/heads/{branch}:refs/heads/{branch}")],
+                None,
+                None,
+            )
+            .into_report()
+            .change_context(GitError::GitError)
+            .attach_printable_lazy(|| format!("Failed to fetch branch: {branch}"))?,
         LockType::Default => {
+            remote
+                .connect(git2::Direction::Fetch)
+                .into_report()
+                .change_context(GitError::GitError)
+                .attach_printable_lazy(|| format!("Failed to connect to remote: {url}"))?;
+
             let default_branch = remote
                 .default_branch()
                 .into_report()
                 .change_context(GitError::GitError)
-                .attach_printable_lazy(|| format!("Failed to fetch default branch: {url}"))
-                .change_context(ResolveError)?;
+                .attach_printable_lazy(|| format!("Failed to fetch default branch: {url}"))?;
 
             let default_branch_name = default_branch
                 .as_str()
                 .ok_or(GitError::GitError)
                 .into_report()
-                .attach_printable_lazy(|| format!("Failed to find default branch: {url}"))
-                .change_context(ResolveError)?;
+                .attach_printable_lazy(|| format!("Failed to find default branch: {url}"))?;
 
             remote
                 .fetch(
-                    &[&format!(
-                        "refs/heads/{default_branch_name}:refs/heads/{default_branch_name}"
-                    )],
+                    &[&format!("{default_branch_name}:{default_branch_name}")],
                     None,
                     None,
                 )
@@ -448,8 +466,7 @@ fn fetch_remote(
                 .change_context(GitError::GitError)
                 .attach_printable_lazy(|| {
                     format!("Failed to fetch default branch: {default_branch_name}")
-                })
-                .change_context(ResolveError)?;
+                })?;
         }
     };
 

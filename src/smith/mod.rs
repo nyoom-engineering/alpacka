@@ -1,6 +1,5 @@
 mod git;
 pub use git::Git;
-use rkyv::Archived;
 use rkyv_dyn::archive_dyn;
 use std::{
     any::Any,
@@ -11,9 +10,8 @@ use std::{
 use crate::package::Package;
 use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
 
-use self::git::LoaderType;
-
 #[derive(Debug)]
+/// An error that can occur when resolving a package
 pub struct ResolveError;
 
 impl Display for ResolveError {
@@ -25,6 +23,7 @@ impl Display for ResolveError {
 impl Context for ResolveError {}
 
 #[derive(Debug)]
+/// An error that can occur when loading a package
 pub struct LoadError;
 
 impl Display for LoadError {
@@ -40,21 +39,13 @@ impl Context for LoadError {}
 #[archive_dyn(deserialize)]
 pub trait LoaderInput: FmtDebug + Send + Sync + UpcastAny {}
 
-impl LoaderInput for Archived<LoaderType> {}
-
+/// A trait that allows a loader input to be upcasted to a dyn [Any]
 pub trait UpcastAny {
     fn upcast_any_ref(&self) -> &dyn Any;
 }
-
-impl UpcastAny for Archived<LoaderType> {
-    fn upcast_any_ref(&self) -> &dyn Any {
-        self
-    }
-}
-
 /// A smith that can be used to resolve and load a package.
 ///
-/// There are 2 parts to a smith:
+/// There are 2 main parts to a smith:
 /// 1. A resolver that can resolve a config package to a loader package, which has all the necessary information to load the package. This is cached inside of the generation file.
 /// 2. A loader that can download and install the package, and run the build script.
 pub trait Smith: FmtDebug + Send + Sync {
@@ -74,10 +65,10 @@ pub trait Smith: FmtDebug + Send + Sync {
     /// This function will return an error if the package cannot be resolved.
     fn resolve(&self, package: &Package) -> ErrorStackResult<Self::Input, ResolveError>;
 
-    /// Get latest commits for a git repo,
+    /// Get latest commits for a git repo.
     ///
     /// # Errors
-    /// This function will return an error if it cannot find the commits
+    /// This function will return an error if it cannot find the changes.
     fn get_change_log(
         &self,
         old_sha: Option<git2::Oid>,
@@ -94,15 +85,25 @@ pub trait Smith: FmtDebug + Send + Sync {
 
 /// "dyn friendly" version of the smith trait, which removes the concrete associated type.
 ///
-/// See the [Smith](trait.Smith.html) trait for more information.
+/// See the [Smith] trait for more information.
 #[allow(clippy::module_name_repetitions)]
-pub trait DynSmith: Send + Sync {
+pub trait DynSmith: Send + Sync + FmtDebug {
     /// Gets the name of the smith
     fn name(&self) -> String;
 
     /// Check if this smith can load the given package. If it can, it will return the name of the package.
     /// This is used to find the correct smith for a package
     fn get_package_name(&self, name: &str) -> Option<String>;
+
+    /// Get latest commits for a git repo.
+    ///
+    /// # Errors
+    /// This function will return an error if it cannot find the changes.
+    fn get_change_log(
+        &self,
+        old_sha: Option<git2::Oid>,
+        path: &Path,
+    ) -> ErrorStackResult<Vec<String>, LoadError>;
 
     /// Resolve a package to a loader package, which has all the necessary information to load the package.
     /// This is cached inside of the generation file.
@@ -136,6 +137,14 @@ where
 
     fn get_package_name(&self, package: &str) -> Option<String> {
         Smith::get_package_name(self, package)
+    }
+
+    fn get_change_log(
+        &self,
+        old_sha: Option<git2::Oid>,
+        path: &Path,
+    ) -> ErrorStackResult<Vec<String>, LoadError> {
+        Smith::get_change_log(self, old_sha, path)
     }
 
     fn resolve_dyn(
