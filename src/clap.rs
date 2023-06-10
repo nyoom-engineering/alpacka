@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 
-/// Alpacka: the next-generation package manager for neovim.
+/// Alpacka: the next-generation package manager for Neovim.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub enum Cli {

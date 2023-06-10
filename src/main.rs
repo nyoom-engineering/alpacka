@@ -4,8 +4,8 @@ use alpacka::{
     clap::{Cli, ListGenerationsFormatMethod},
     config::Config,
     manifest::{
-        add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile,
-        JsonGenerationsFile, JsonManifest, Manifest, Plugin,
+        add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Json,
+        JsonGenerationsFile, Manifest, Plugin,
     },
     smith::{DynSmith, Git},
 };
@@ -131,7 +131,8 @@ fn list_generations(
                 let hashed_config_file = hash.0;
                 let generation_number = hash.1;
 
-                let manifest: Manifest = manifest.deserialize(&mut Infallible).unwrap();
+                // TODO: use the manifest for output
+                let _manifest: Manifest = manifest.deserialize(&mut Infallible).unwrap();
 
                 info!("Manifest number {idx} | Hash {hashed_config_file} | generation {generation_number}");
             }
@@ -148,7 +149,7 @@ fn list_generations(
                         .into_iter()
                         .chain(once((
                             hash.0.to_string(),
-                            JsonManifest {
+                            Json {
                                 hash: hash.0.to_string(),
                                 generation: hash.1.to_string(),
                                 neovim_version: manifest.neovim_version,
@@ -257,16 +258,16 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), MainError>
     Ok(())
 }
 
-fn get_generations_from_file<'a>(
-    generations_file: &'a [u8],
-) -> Result<&'a ArchivedGenerationsFile, MainError> {
+fn get_generations_from_file(
+    generations_file: &[u8],
+) -> Result<&ArchivedGenerationsFile, MainError> {
     let generations = check_archived_root::<GenerationsFile>(generations_file)
         .map_err(|e| {
             error!("Failed to check generations file: {}", e);
             MainError
         })
         .into_report()
-        .attach_printable_lazy(|| format!("Failed to check generations file."))?;
+        .attach_printable_lazy(|| "Failed to check generations file.".to_string())?;
 
     Ok(generations)
 }

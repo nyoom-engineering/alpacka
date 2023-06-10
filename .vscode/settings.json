@@ -1,6 +1,11 @@
 {
-    "cSpell.words": [
-        "libgit",
-        "typetag"
-    ]
+  "cSpell.words": [
+    "Alpacka",
+    "hasher",
+    "libgit",
+    "Neovim",
+    "nvim",
+    "rkyv",
+    "typetag"
+  ]
 }

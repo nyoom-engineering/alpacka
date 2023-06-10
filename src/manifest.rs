@@ -35,7 +35,7 @@ pub struct GenerationHash(pub u64, pub u64);
 pub struct GenerationsFile(pub BTreeMap<GenerationHash, Manifest>);
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct JsonGenerationsFile(pub BTreeMap<String, JsonManifest>);
+pub struct JsonGenerationsFile(pub BTreeMap<String, Json>);
 
 impl GenerationsFile {
     #[must_use]
@@ -199,7 +199,7 @@ pub struct Manifest {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct JsonManifest {
+pub struct Json {
     /// The neovim version this manifest was built for
     pub neovim_version: String,
     pub plugins: Vec<Plugin>,
