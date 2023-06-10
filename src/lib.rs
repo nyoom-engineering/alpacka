@@ -1,5 +1,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
+// multiple crate versions is allowed because of other crates not updating deps
+// used underscore binding is allowed because of macros
+#![allow(clippy::multiple_crate_versions, clippy::used_underscore_binding)]
 
 //! Alpacka: the next-generation package manager for neovim.
 //!

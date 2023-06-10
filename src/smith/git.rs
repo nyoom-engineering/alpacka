@@ -1,6 +1,7 @@
 use crate::package::Package;
 use bytecheck::CheckBytes;
 use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
+use git2::{ErrorCode, Repository};
 use rkyv::Archive;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::Path};
@@ -326,10 +327,10 @@ impl Smith for Git {
 
     #[tracing::instrument]
     fn load(&self, input: &Self::Input, path: &Path) -> ErrorStackResult<(), LoadError> {
-        let repo = match git2::Repository::open(path) {
+        let repo = match Repository::open(path) {
             Ok(repo) => repo,
             Err(e) => match e.code() {
-                git2::ErrorCode::NotFound => git2::Repository::clone(&input.remote, path)
+                ErrorCode::NotFound => Repository::clone(&input.remote, path)
                     .into_report()
                     .change_context(GitError::GitError)
                     .attach_printable_lazy(|| format!("Failed to clone repo: {}", input.remote))
