@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 /// Alpacka: the next-generation package manager for neovim.
 #[derive(Parser, Debug)]
@@ -8,10 +8,28 @@ use clap::Parser;
 pub enum Cli {
     Install {
         /// The path to the config file
-        /// Defaults to `$XDG_CONFIG_HOME/nvim/packages.jsob`
+        /// Defaults to `$XDG_CONFIG_HOME/nvim/packages.json`
+        #[arg(short, long)]
         path: Option<PathBuf>,
         /// The data directory
         /// Defaults to `$XDG_DATA_HOME/nvim/site/pack/alpacka`
+        #[arg(short, long)]
         data_dir: Option<PathBuf>,
     },
+    ListGenerations {
+        /// The data directory containing the generations.rkyv file
+        /// Defaults to `$XDG_DATA_HOME/nvim/site/pack/alpacka`
+        #[arg(short, long)]
+        data_dir: Option<PathBuf>,
+        /// The output format
+        /// Defaults to `ListGenerationsFormatMethod::Human`
+        #[arg(short, long)]
+        format_style: Option<ListGenerationsFormatMethod>,
+    },
+}
+
+#[derive(Debug, ValueEnum, Clone)]
+pub enum ListGenerationsFormatMethod {
+    Human,
+    Json,
 }

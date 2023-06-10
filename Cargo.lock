@@ -55,19 +55,20 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bytecheck"
-version = "0.6.9"
+version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d11cac2c12b5adc6570dad2ee1b87eff4955dac476fe12d81e5fdd352e52406f"
+checksum = "13fe11640a23eb24562225322cd3e452b93a3d4091d62fab69c70542fcd17d1f"
 dependencies = [
  "bytecheck_derive",
  "ptr_meta",
+ "simdutf8",
 ]
 
 [[package]]
 name = "bytecheck_derive"
-version = "0.6.9"
+version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13e576ebe98e605500b3c8041bb888e966653577172df6dd97398714eb30b9bf"
+checksum = "e31225543cb46f81a7e224762764f4a6a0f097b1db0b175f69e8065efaa42de5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -699,8 +700,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv"
-version = "0.7.39"
-source = "git+https://github.com/rkyv/rkyv?branch=rkyv_dyn_error_box#64f55360c6a75c741df1fdd4b1be8ac50cf92355"
+version = "0.7.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21499ed91807f07ae081880aabb2ccc0235e9d88011867d984525e9a4c3cfa3e"
 dependencies = [
  "bytecheck",
  "hashbrown",
@@ -712,8 +714,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv_derive"
-version = "0.7.39"
-source = "git+https://github.com/rkyv/rkyv?branch=rkyv_dyn_error_box#64f55360c6a75c741df1fdd4b1be8ac50cf92355"
+version = "0.7.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac1c672430eb41556291981f45ca900a0239ad007242d1cb4b4167af842db666"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -722,8 +725,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv_dyn"
-version = "0.7.39"
-source = "git+https://github.com/rkyv/rkyv?branch=rkyv_dyn_error_box#64f55360c6a75c741df1fdd4b1be8ac50cf92355"
+version = "0.7.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01dcc75046c2d1f1a62dc0ef5bcfc36170e07d900c5ebefc6ea9ef7df657e17a"
 dependencies = [
  "bytecheck",
  "inventory",
@@ -736,8 +740,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv_dyn_derive"
-version = "0.7.39"
-source = "git+https://github.com/rkyv/rkyv?branch=rkyv_dyn_error_box#64f55360c6a75c741df1fdd4b1be8ac50cf92355"
+version = "0.7.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d13818e8db0eddd83a337ade3aea215e136be92e9e350e8520110b3697368bb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -746,16 +751,18 @@ dependencies = [
 
 [[package]]
 name = "rkyv_typename"
-version = "0.7.33"
-source = "git+https://github.com/rkyv/rkyv?branch=rkyv_dyn_error_box#64f55360c6a75c741df1fdd4b1be8ac50cf92355"
+version = "0.7.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d98a2aaea8e1a106f840b31928889cb90d0fa939c7289d6d7b49a45f827fa6e"
 dependencies = [
  "rkyv_typename_derive",
 ]
 
 [[package]]
 name = "rkyv_typename_derive"
-version = "0.7.33"
-source = "git+https://github.com/rkyv/rkyv?branch=rkyv_dyn_error_box#64f55360c6a75c741df1fdd4b1be8ac50cf92355"
+version = "0.7.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c0d4434dc0d4dbed54d2b7c083d4a6b2343a6f42fc02f0b595433fe51a0038c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -848,6 +855,12 @@ checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
 ]
+
+[[package]]
+name = "simdutf8"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
 
 [[package]]
 name = "smallvec"
