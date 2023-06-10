@@ -1,13 +1,16 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use alpacka::{
+    clap::{Cli, ListGenerationsFormatMethod},
     config::Config,
     manifest::{
-        add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Manifest, Plugin,
+        add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Json,
+        JsonGenerationsFile, Manifest, Plugin,
     },
     smith::{DynSmith, Git},
 };
-use error_stack::{Context, IntoReport, Report, Result, ResultExt};
+use clap::Parser;
+use error_stack::{ensure, Context, IntoReport, Report, Result, ResultExt};
 use rayon::prelude::*;
 use rkyv::{check_archived_root, to_bytes, Deserialize, Infallible};
 use std::{
@@ -16,6 +19,7 @@ use std::{
     fs::File,
     hash::{Hash, Hasher},
     io::{BufRead, BufReader, Write},
+    iter::once,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
@@ -51,20 +55,131 @@ fn main() -> error_stack::Result<(), MainError> {
         .with(error)
         .init();
 
-    let config_dir = std::env::var_os("XDG_CONFIG_HOME")
-        .and_then(dirs_sys::is_absolute_path)
-        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
+    match Cli::parse() {
+        Cli::Install { path, data_dir } => {
+            let config_path = path.unwrap_or_else(|| {
+                let config_dir = std::env::var_os("XDG_CONFIG_HOME")
+                    .and_then(dirs_sys::is_absolute_path)
+                    .or_else(|| dirs_sys::home_dir().map(|h| h.join(".config")));
 
-    let config_path = config_dir.map(|cd| cd.join("nvim/packages.json")).unwrap();
+                config_dir.map(|cd| cd.join("nvim/packages.json")).unwrap()
+            });
 
-    let data_dir = std::env::var_os("XDG_DATA_HOME")
-        .and_then(dirs_sys::is_absolute_path)
-        .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
+            let data_path = data_dir.unwrap_or_else(|| {
+                let data_dir = std::env::var_os("XDG_DATA_HOME")
+                    .and_then(dirs_sys::is_absolute_path)
+                    .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
 
-    let data_path = data_dir
-        .map(|dd| dd.join("nvim/site/pack/alpacka/"))
-        .unwrap();
+                data_dir
+                    .map(|dd| dd.join("nvim/site/pack/alpacka/"))
+                    .unwrap()
+            });
 
+            install(config_path, data_path)
+        }
+        Cli::ListGenerations {
+            data_dir,
+            format_style,
+        } => {
+            let data_path = data_dir.unwrap_or_else(|| {
+                let data_dir = std::env::var_os("XDG_DATA_HOME")
+                    .and_then(dirs_sys::is_absolute_path)
+                    .or_else(|| dirs_sys::home_dir().map(|h| h.join(".local/share")));
+
+                data_dir
+                    .map(|dd| dd.join("nvim/site/pack/alpacka/"))
+                    .unwrap()
+            });
+
+            list_generations(
+                data_path,
+                format_style.unwrap_or(ListGenerationsFormatMethod::Human),
+            )
+        }
+    }?;
+
+    Ok(())
+}
+
+fn list_generations(
+    data_path: PathBuf,
+    format_style: ListGenerationsFormatMethod,
+) -> Result<(), MainError> {
+    let generations_path = data_path.join("generations.rkyv");
+
+    ensure!(generations_path.exists(), {
+        // I should probably make this less jank
+        error!("Generations file path does not exist. Aborting");
+        MainError
+    });
+
+    let generations_file = std::fs::read(&generations_path)
+        .into_report()
+        .attach_printable_lazy(|| {
+            format!(
+                "Failed to read generations file. Generations file path: {}",
+                generations_path.display()
+            )
+        })
+        .change_context(MainError)?;
+
+    let generations = get_generations_from_file(&generations_file)?;
+
+    match format_style {
+        ListGenerationsFormatMethod::Human => {
+            for (idx, (hash, manifest)) in generations.0.iter().enumerate() {
+                let hashed_config_file = hash.0;
+                let generation_number = hash.1;
+
+                // TODO: use the manifest for output
+                let _manifest: Manifest = manifest.deserialize(&mut Infallible).unwrap();
+
+                info!("Manifest number {idx} | Hash {hashed_config_file} | generation {generation_number}");
+            }
+        }
+        ListGenerationsFormatMethod::Json => {
+            let deserialised: GenerationsFile = generations.deserialize(&mut Infallible).unwrap();
+
+            // this is possibly the most cursed solution to this
+            let json = deserialised.0.into_iter().fold(
+                JsonGenerationsFile(BTreeMap::new()),
+                |curr, (hash, manifest)| {
+                    let new_map = curr
+                        .0
+                        .into_iter()
+                        .chain(once((
+                            hash.0.to_string(),
+                            Json {
+                                hash: hash.0.to_string(),
+                                generation: hash.1.to_string(),
+                                neovim_version: manifest.neovim_version,
+                                plugins: manifest.plugins,
+                            },
+                        )))
+                        .collect();
+
+                    JsonGenerationsFile(new_map)
+                },
+            );
+
+            let json = serde_json::to_string(&json)
+                .into_report()
+                .attach_printable_lazy(|| {
+                    format!(
+                        "Failed to convert generation file {} into JSON",
+                        generations_path.display()
+                    )
+                })
+                .change_context(MainError)?;
+
+            println!("{json}")
+        }
+    }
+
+    Ok(())
+}
+
+fn install(config_path: PathBuf, data_path: PathBuf) -> Result<(), MainError> {
     if !data_path.exists() {
         std::fs::create_dir_all(&data_path)
             .into_report()
@@ -78,6 +193,7 @@ fn main() -> error_stack::Result<(), MainError> {
     }
 
     load_alpacka(&data_path, config_path)?;
+
     Ok(())
 }
 
@@ -114,18 +230,7 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), MainError>
             })
             .change_context(MainError)?;
 
-        let generations = check_archived_root::<GenerationsFile>(&generations_file)
-            .map_err(|e| {
-                error!("Failed to check generations file: {}", e);
-                MainError
-            })
-            .into_report()
-            .attach_printable_lazy(|| {
-                format!(
-                    "Failed to check generations file. Generations file path: {}",
-                    generation_path.display()
-                )
-            })?;
+        let generations = get_generations_from_file(&generations_file)?;
 
         // find generation that have the same hash as the current config, and the highest generation
         get_latest(generations, config_hash).map_or_else(
@@ -151,6 +256,20 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), MainError>
         .collect::<Result<_, _>>()?;
 
     Ok(())
+}
+
+fn get_generations_from_file(
+    generations_file: &[u8],
+) -> Result<&ArchivedGenerationsFile, MainError> {
+    let generations = check_archived_root::<GenerationsFile>(generations_file)
+        .map_err(|e| {
+            error!("Failed to check generations file: {}", e);
+            MainError
+        })
+        .into_report()
+        .attach_printable_lazy(|| "Failed to check generations file.".to_string())?;
+
+    Ok(generations)
 }
 
 #[tracing::instrument]

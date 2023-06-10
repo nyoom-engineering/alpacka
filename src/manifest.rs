@@ -1,12 +1,24 @@
 use bytecheck::CheckBytes;
-use rkyv::{to_bytes, Archive, Deserialize, Infallible};
+use rkyv::{to_bytes, Archive, Archived, Deserialize, Infallible};
+use rkyv_dyn::archive_dyn;
 use rkyv_typename::TypeName;
-use std::{collections::BTreeMap, io::Write, path::PathBuf};
+use std::{any::Any, collections::BTreeMap, io::Write, path::PathBuf};
 
-use crate::smith::SerializeLoaderInput;
+use crate::smith::{DeserializeLoaderInput, LoaderInput, SerializeLoaderInput, UpcastAny};
 
 #[derive(
-    Archive, rkyv::Serialize, rkyv::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy,
+    Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[archive_attr(derive(TypeName, CheckBytes, Eq, PartialEq, PartialOrd, Ord))]
 /// A hash of the config file
@@ -21,6 +33,9 @@ pub struct GenerationHash(pub u64, pub u64);
 #[derive(Archive, rkyv::Serialize, rkyv::Deserialize, Debug)]
 #[archive_attr(derive(TypeName, CheckBytes))]
 pub struct GenerationsFile(pub BTreeMap<GenerationHash, Manifest>);
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct JsonGenerationsFile(pub BTreeMap<String, Json>);
 
 impl GenerationsFile {
     #[must_use]
@@ -183,6 +198,16 @@ pub struct Manifest {
     pub plugins: Vec<Plugin>,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Json {
+    /// The neovim version this manifest was built for
+    pub neovim_version: String,
+    pub plugins: Vec<Plugin>,
+    // These need to be strings because u64 cannot fit into JSON
+    pub hash: String,
+    pub generation: String,
+}
+
 impl Manifest {
     #[must_use]
     pub fn new(neovim_version: String, plugins: Vec<Plugin>) -> Self {
@@ -211,7 +236,9 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[derive(
+    Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, serde::Serialize, serde::Deserialize,
+)]
 #[archive_attr(derive(CheckBytes))]
 /// A plugin, as defined in the manifest
 pub struct Plugin {
@@ -232,7 +259,32 @@ pub struct Plugin {
     /// A command which is run in the plugin's directory after loading
     pub build: String,
     /// The data which is used for the loader
+    #[serde(skip, default = "create_empty_loader_data")]
     pub loader_data: Box<dyn SerializeLoaderInput>,
+}
+
+#[derive(Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, TypeName)]
+#[archive_attr(derive(Debug, TypeName))]
+pub struct EmptyLoaderInput;
+
+#[archive_dyn(deserialize)]
+impl LoaderInput for EmptyLoaderInput {}
+
+impl UpcastAny for EmptyLoaderInput {
+    fn upcast_any_ref(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
+
+impl LoaderInput for Archived<EmptyLoaderInput> {}
+impl UpcastAny for Archived<EmptyLoaderInput> {
+    fn upcast_any_ref(&self) -> &dyn Any {
+        self
+    }
+}
+
+fn create_empty_loader_data() -> Box<dyn SerializeLoaderInput> {
+    Box::new(EmptyLoaderInput)
 }
 
 #[cfg(test)]
