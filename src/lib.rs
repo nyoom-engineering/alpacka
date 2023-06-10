@@ -8,7 +8,7 @@
 //! It also exports functions to run the package manager, such as resolving and loading plugins.
 //!
 //! This is NOT meant to be used by end-users, but rather by other programs that want to use alpacka as a library, such as a user-facing GUI/neovim plugin.
-pub mod clap;
+pub mod cli;
 pub mod config;
 pub mod manifest;
 pub mod package;
