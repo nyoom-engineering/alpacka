@@ -42,9 +42,8 @@ features = ["env-filter"]
 name = "alpacka"
 path = "src/main.rs"
 
-[profile.optimized]
-inherits = "release"
-opt-level = "z"
+[profile.release]
+opt-level = 3
 strip = true
 lto = true
 codegen-units = 1
