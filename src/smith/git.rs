@@ -1,17 +1,12 @@
-use crate::{
-    package::Package,
-    smith::{DeserializeLoaderInput, SerializeLoaderInput},
-};
+use crate::package::Package;
 use bytecheck::CheckBytes;
 use error_stack::{Context, IntoReport, Result as ErrorStackResult, ResultExt};
-use rkyv::{Archive, Archived};
-use rkyv_dyn::archive_dyn;
-use rkyv_typename::TypeName;
+use rkyv::Archive;
 use serde::{Deserialize, Serialize};
-use std::{any::Any, fmt::Display, path::Path};
+use std::{fmt::Display, path::Path};
 use tracing::debug;
 
-use super::{LoadError, LoaderInput, ResolveError, Smith, UpcastAny};
+use super::{LoadError, LoaderInput, ResolveError, Smith};
 
 #[derive(Debug)]
 /// An error that can occur when resolving a git package
@@ -78,34 +73,20 @@ pub enum LockType {
     Default,
 }
 
-#[derive(Debug, rkyv::Serialize, rkyv::Deserialize, Archive, Clone)]
-#[archive_attr(derive(CheckBytes, Debug, TypeName))]
+#[derive(Debug, rkyv::Serialize, rkyv::Deserialize, Archive, Clone, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes, Debug))]
 /// The input for a git loader
-pub struct LoaderType {
+pub struct Input {
     /// The commit hash to lock to
     commit_hash: String,
     /// The remote to use
     remote: String,
 }
 
-#[archive_dyn(deserialize)]
-impl LoaderInput for LoaderType {}
-
-impl UpcastAny for LoaderType {
-    fn upcast_any_ref(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
-
-impl LoaderInput for Archived<LoaderType> {}
-impl UpcastAny for Archived<LoaderType> {
-    fn upcast_any_ref(&self) -> &dyn Any {
-        self
-    }
-}
+impl LoaderInput for Input {}
 
 impl Smith for Git {
-    type Input = LoaderType;
+    type Input = Input;
 
     fn name(&self) -> String {
         "git".to_string()
@@ -205,7 +186,7 @@ impl Smith for Git {
             .id()
             .to_string();
 
-        Ok(LoaderType {
+        Ok(Input {
             commit_hash,
             remote: url,
         })

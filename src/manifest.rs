@@ -1,10 +1,9 @@
 use bytecheck::CheckBytes;
-use rkyv::{to_bytes, Archive, Archived, Deserialize, Infallible};
-use rkyv_dyn::archive_dyn;
+use rkyv::{to_bytes, Archive, Deserialize, Infallible};
 use rkyv_typename::TypeName;
-use std::{any::Any, collections::BTreeMap, io::Write, path::PathBuf};
+use std::{collections::BTreeMap, io::Write, path::PathBuf};
 
-use crate::smith::{DeserializeLoaderInput, LoaderInput, SerializeLoaderInput, UpcastAny};
+use crate::smith::enums::Inputs;
 
 #[derive(
     Archive,
@@ -259,32 +258,7 @@ pub struct Plugin {
     /// A command which is run in the plugin's directory after loading
     pub build: String,
     /// The data which is used for the loader
-    #[serde(skip, default = "create_empty_loader_data")]
-    pub loader_data: Box<dyn SerializeLoaderInput>,
-}
-
-#[derive(Debug, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, TypeName)]
-#[archive_attr(derive(Debug, TypeName))]
-pub struct EmptyLoaderInput;
-
-#[archive_dyn(deserialize)]
-impl LoaderInput for EmptyLoaderInput {}
-
-impl UpcastAny for EmptyLoaderInput {
-    fn upcast_any_ref(&self) -> &dyn Any {
-        self as &dyn Any
-    }
-}
-
-impl LoaderInput for Archived<EmptyLoaderInput> {}
-impl UpcastAny for Archived<EmptyLoaderInput> {
-    fn upcast_any_ref(&self) -> &dyn Any {
-        self
-    }
-}
-
-fn create_empty_loader_data() -> Box<dyn SerializeLoaderInput> {
-    Box::new(EmptyLoaderInput)
+    pub loader_data: Inputs,
 }
 
 #[cfg(test)]

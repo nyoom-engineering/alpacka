@@ -1,6 +1,6 @@
 use crate::{
     package::{Config as ConfigPackage, Package, WithSmith},
-    smith::DynSmith,
+    smith::enums::Loaders,
 };
 use error_stack::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ impl Config {
     #[tracing::instrument]
     pub fn create_package_list(
         &self,
-        smiths: &[Box<dyn DynSmith>],
+        smiths: &[Loaders],
     ) -> Result<Vec<WithSmith>, CreatePackageListError> {
         let mut packages = Vec::with_capacity(self.packages.len());
 

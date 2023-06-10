@@ -4,7 +4,7 @@ use crate::{
     manifest::{
         add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Manifest, Plugin,
     },
-    smith::{DynSmith, Git},
+    smith::{enums::Loaders, Git},
 };
 use error_stack::{Context, IntoReport, Result, ResultExt};
 use rayon::prelude::*;
@@ -82,7 +82,7 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), Error> {
         hasher.finish()
     };
 
-    let smiths: Vec<Box<dyn DynSmith>> = vec![Box::new(Git::new())];
+    let smiths: Vec<Loaders> = vec![Loaders::Git(Git::new())];
     let generation_path = data_path.join("generations.rkyv");
 
     let manifest = if generation_path.exists() {
@@ -134,7 +134,7 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), Error> {
 
 #[tracing::instrument(skip(generations))]
 fn create_manifest_from_config(
-    smiths: &[Box<dyn DynSmith>],
+    smiths: &[Loaders],
     config: &Config,
     generations_path: &Path,
     generations: Option<&ArchivedGenerationsFile>,
@@ -267,11 +267,7 @@ fn create_manifest_from_config(
 }
 
 #[tracing::instrument]
-fn load_plugin(
-    smiths: &[Box<dyn DynSmith>],
-    plugin: &Plugin,
-    data_path: &Path,
-) -> Result<(), Error> {
+fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<(), Error> {
     let smith = smiths
         .iter()
         .find(|s| s.name() == plugin.smith)
@@ -284,7 +280,7 @@ fn load_plugin(
         .join(plugin.rename.as_ref().unwrap_or(&plugin.name));
 
     smith
-        .load_dyn(plugin.loader_data.as_ref(), &package_path)
+        .load(&plugin.loader_data, &package_path)
         .attach_printable_lazy(|| {
             format!(
                 "Failed to load package. Package name: {}, Package path: {}",

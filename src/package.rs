@@ -1,6 +1,9 @@
 //! A module which contains structs and types for packages
 
-use crate::smith::{DynSmith, ResolveError, SerializeLoaderInput};
+use crate::smith::{
+    enums::{Inputs, Loaders},
+    ResolveError,
+};
 use error_stack::{IntoReport, Result, ResultExt};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -41,7 +44,7 @@ pub struct WithSmith {
 }
 
 /// A type alias for a package loader input and a package with a smith
-pub type WithLoaderInput = (Box<dyn SerializeLoaderInput>, WithSmith);
+pub type WithLoaderInput = (Inputs, WithSmith);
 
 impl WithSmith {
     /// Check if this package is optional
@@ -55,10 +58,7 @@ impl WithSmith {
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
     #[tracing::instrument]
-    pub fn resolve(
-        &self,
-        smiths: &[Box<dyn DynSmith>],
-    ) -> Result<Box<dyn SerializeLoaderInput>, ResolveError> {
+    pub fn resolve(&self, smiths: &[Loaders]) -> Result<Inputs, ResolveError> {
         let smith = smiths
             .iter()
             .find(|smith| smith.name() == self.smith)
@@ -66,7 +66,7 @@ impl WithSmith {
             .into_report()
             .attach_printable_lazy(|| format!("Smith {} not found", self.smith))?;
 
-        smith.resolve_dyn(&self.package)
+        smith.resolve(&self.package)
     }
 
     /// Recursively resolve a package to a loader package, which has all the necessary information to load the package.
@@ -77,10 +77,7 @@ impl WithSmith {
     /// # Errors
     /// This function will return an error if the package or one of its dependencies cannot be resolved.
     #[tracing::instrument]
-    pub fn resolve_recurse(
-        self,
-        smiths: &[Box<dyn DynSmith>],
-    ) -> Result<Vec<WithLoaderInput>, ResolveError> {
+    pub fn resolve_recurse(self, smiths: &[Loaders]) -> Result<Vec<WithLoaderInput>, ResolveError> {
         let mut deps = self
             .package
             .config_package
@@ -123,7 +120,7 @@ impl WithSmith {
             })?;
 
         let loader_data = smith_to_use
-            .resolve_dyn(&self.package)
+            .resolve(&self.package)
             .attach_printable_lazy(|| {
                 format!(
                     "Failed to resolve package. Package name: {}",
