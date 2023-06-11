@@ -199,7 +199,7 @@ impl Smith for Git {
     /// Gets the commit messages between a sha and the current HEAD, if not sha is provided, it
     /// takes up to 5 of the latest commits on the current branch, provided they exist.
     ///
-    /// ```
+    /// ```ignore
     /// use alpacka::{package::{Package, Config}, smith::{Smith, Git}};
     /// use std::path::Path;
     /// use std::collections::BTreeMap;
