@@ -9,7 +9,7 @@
 - [x] Lockfile interface. "packages.json" contain all packages to be installed, with frontends being able to generate them. (No frontends yet)
 - [x] Cache old versions of lockfiles into a file. This allows for fast rollbacks, as we just look at the previous lockfile's output.
 - [x] Extremely fast rollbacks. Usually < 1 second as no resolvers are run.
-- [ ] CLI to install and inspect packages.
+- [x] CLI to install and inspect packages.
 
 TODO
 
