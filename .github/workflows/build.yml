@@ -66,7 +66,8 @@ jobs:
         run: brew install openssl git
       - uses: actions/checkout@v2
       - name: set SDKROOT
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+        run: |
+          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
       - uses: goto-bus-stop/setup-zig@v2
       - name: install rust
         uses: actions-rs/toolchain@v1
@@ -86,6 +87,8 @@ jobs:
         with:
           command: zigbuild
           args: --release --features vendor --target aarch64-apple-darwin
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
       - name: upload alpacka aarch64 binary
         uses: actions/upload-artifact@v2
         with:
