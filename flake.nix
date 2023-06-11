@@ -40,6 +40,7 @@
 
       rustToolchain = pkgs.pkgsBuildHost.rust-bin.stable.latest.default.override {
         extensions = ["rust-src" "rust-analyzer"];
+        targets = ["aarch64-apple-darwin"];
       };
 
       inherit (pkgs) lib;
@@ -50,8 +51,10 @@
       buildInputs =
         [
           # libgit2 deps
+          # including vendored
           pkgs.pkg-config
           pkgs.openssl
+          pkgs.perl
         ]
         ++ lib.optionals pkgs.stdenv.isDarwin [
           # libgit2 deps
@@ -63,6 +66,7 @@
       # Build *just* the cargo dependencies, so we can reuse
       # all of that work (e.g. via cachix) when running in CI
       cargoArtifacts = craneLib.buildDepsOnly {
+        stdenv = pkgs.clangStdenv;
         inherit src buildInputs;
       };
 
@@ -70,6 +74,7 @@
       # artifacts from above.
       alpacka = craneLib.buildPackage {
         inherit cargoArtifacts src buildInputs;
+        stdenv = pkgs.clangStdenv;
         doCheck = false;
       };
     in {
@@ -79,6 +84,7 @@
         # since nextest doesn't support doctests yet, we are not using it.
         alpacka = craneLib.buildPackage {
           inherit cargoArtifacts src buildInputs;
+          stdenv = pkgs.clangStdenv;
           doCheck = true;
         };
 
@@ -90,21 +96,25 @@
         # prevent downstream consumers from building our crate by itself.
         alpacka-clippy = craneLib.cargoClippy {
           inherit cargoArtifacts src buildInputs;
+          stdenv = pkgs.clangStdenv;
           cargoClippyExtraArgs = "--all-targets -- --deny warnings";
         };
 
         alpacka-doc = craneLib.cargoDoc {
           inherit cargoArtifacts src buildInputs;
+          stdenv = pkgs.clangStdenv;
         };
 
         # Check formatting
         alpacka-fmt = craneLib.cargoFmt {
           inherit src;
+          stdenv = pkgs.clangStdenv;
         };
 
         # Audit dependencies
         alpacka-audit = craneLib.cargoAudit {
           inherit src advisory-db;
+          stdenv = pkgs.clangStdenv;
         };
       };
 

@@ -11,10 +11,11 @@ categories = ["command-line-utilities", "text-editors"]
 edition = "2021"
 
 [dependencies]
+openssl-probe = { version = "0.1.5", optional = true }
 bytecheck = "0.6.11"
 dirs-sys = "0.4.0"
 error-stack = { version = "0.3.1", features = ["spantrace"] }
-git2 = "0.17.2"
+git2 = { version = "0.17.2" }
 ptr_meta = "0.1.4"
 rayon = "1.6.1"
 rkyv = { version = "0.7.41", features = ["validation", "strict"] }
@@ -47,3 +48,6 @@ opt-level = 3
 strip = true
 lto = true
 codegen-units = 1
+
+[features]
+vendor = ["git2/vendored-openssl", "git2/vendored-libgit2", "dep:openssl-probe"]

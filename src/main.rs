@@ -27,6 +27,11 @@ impl Display for MainError {
 impl Context for MainError {}
 
 fn main() -> error_stack::Result<(), MainError> {
+    #[cfg(feature = "vendor")]
+    {
+        openssl_probe::init_ssl_cert_env_vars();
+    }
+
     Report::set_color_mode(error_stack::fmt::ColorMode::Color);
 
     let error_handler = tracing_error::ErrorLayer::new(PrettyFields::new());

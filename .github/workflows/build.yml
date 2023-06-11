@@ -73,11 +73,17 @@ jobs:
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v1
+      - uses: goto-bus-stop/setup-zig@v2
+      - name: install zigbuild
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-zigbuild
       - name: build alpacka
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --release --target aarch64-apple-darwin
+          command: zigbuild
+          args: --release --features vendor --target aarch64-apple-darwin
       - name: upload alpacka aarch64 binary
         uses: actions/upload-artifact@v2
         with:
