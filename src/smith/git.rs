@@ -105,7 +105,6 @@ impl Smith for Git {
         let repo_url = repo_url.to_owned();
 
         let url = match (repo_type.as_str(), repo_url.as_str()) {
-            // repo format: git:host:path
             ("git", repo) => match self.clone_type {
                 CloneType::Ssh => format!("git@{repo}.git"),
                 CloneType::Https => {
@@ -113,7 +112,11 @@ impl Smith for Git {
                         .split_once(':')
                         .ok_or(ResolveError)
                         .into_report()
-                        .attach_printable_lazy(|| format!("Failed to parse git repo: {repo}"))?;
+                        .attach_printable_lazy(|| {
+                            format!(
+                                "Failed to parse git repo: {repo}. Format: git:{{host}}:{{path}}"
+                            )
+                        })?;
 
                     format!("https://{host}/{path}.git")
                 }

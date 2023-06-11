@@ -30,6 +30,8 @@ pub enum Cli {
 
 #[derive(Debug, ValueEnum, Clone)]
 pub enum ListGenerationsFormatMethod {
+    /// Human-readable output
     Human,
+    /// JSON output, to be parsed by another program
     Json,
 }

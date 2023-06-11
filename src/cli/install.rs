@@ -16,8 +16,8 @@ use std::{
     hash::{Hash, Hasher},
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    thread,
+    process::{ChildStderr, ChildStdout, Command, Stdio},
+    thread::{self, Scope},
 };
 use tracing::{debug, info, warn};
 
@@ -292,10 +292,23 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
 
     let build_script_exists = !plugin.build.is_empty();
     if build_script_exists {
-        let mut split = plugin.build.split_whitespace();
+        let mut build_arguments = plugin.build.split_whitespace();
 
-        let command = Command::new(split.next().unwrap_or_default())
-            .args(split)
+        let build_command = build_arguments
+            .next()
+            .ok_or(Error::LoadManifestError)
+            .into_report()
+            .attach_printable_lazy(|| {
+                format!(
+                    "Failed to get build command. You may have an invalid build command. Package name: {}, Package path: {}",
+                    plugin.name,
+                    package_path.display()
+                )
+            })
+            .change_context(Error::LoadManifestError)?;
+
+        let command = Command::new(build_command)
+            .args(build_arguments)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .current_dir(&package_path)
@@ -323,31 +336,38 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
         let stdout = BufReader::new(stdout);
         let stderr = BufReader::new(stderr);
 
-        thread::scope(move |threads| -> Result<(), Error> {
-            let stdout = threads.spawn(move || -> Result<(), Error> {
-                for line in stdout.lines() {
-                    let line = line.into_report().change_context(Error::LoadError)?;
-                    info!("STDOUT from {}: {}", plugin.name, line);
-                }
-
-                Ok(())
-            });
-
-            let stderr = threads.spawn(move || -> Result<(), Error> {
-                for line in stderr.lines() {
-                    let line = line.into_report().change_context(Error::LoadError)?;
-                    warn!("STDERR from {}: {}", plugin.name, line);
-                }
-
-                Ok(())
-            });
-
-            stdout.join().unwrap()?;
-            stderr.join().unwrap()?;
-
-            Ok(())
-        })?;
+        thread::scope(move |threads| create_stdio_readers(&plugin.name, stdout, stderr, threads))?;
     }
+
+    Ok(())
+}
+
+fn create_stdio_readers<'a>(
+    plugin_name: &'a str,
+    stdout: BufReader<ChildStdout>,
+    stderr: BufReader<ChildStderr>,
+    threads: &'a Scope<'a, '_>,
+) -> Result<(), Error> {
+    let stdout = threads.spawn(move || -> Result<(), Error> {
+        for line in stdout.lines() {
+            let line = line.into_report().change_context(Error::LoadError)?;
+            info!("STDOUT from build script of {}: {}", plugin_name, line);
+        }
+
+        Ok(())
+    });
+
+    let stderr = threads.spawn(move || -> Result<(), Error> {
+        for line in stderr.lines() {
+            let line = line.into_report().change_context(Error::LoadError)?;
+            warn!("STDERR from build script {}: {}", plugin_name, line);
+        }
+
+        Ok(())
+    });
+
+    stdout.join().unwrap()?;
+    stderr.join().unwrap()?;
 
     Ok(())
 }

@@ -47,7 +47,6 @@ pub fn list_generations(
     let generations_path = data_path.join("generations.rkyv");
 
     ensure!(generations_path.exists(), {
-        // I should probably make this less jank
         error!("Generations file path does not exist. Aborting");
         Error::LoadError
     });
@@ -85,13 +84,13 @@ pub fn list_generations(
             }
         }
         ListGenerationsFormatMethod::Json => {
-            let deserialised: GenerationsFile = generations.deserialize(&mut Infallible).unwrap();
+            let deserialized: GenerationsFile = generations.deserialize(&mut Infallible).unwrap();
 
             // this is possibly the most cursed solution to this
-            let json = deserialised.0.into_iter().fold(
+            let json = deserialized.0.into_iter().fold(
                 JsonGenerationsFile(BTreeMap::new()),
-                |curr, (hash, manifest)| {
-                    let new_map = curr
+                |current, (hash, manifest)| {
+                    let new_map = current
                         .0
                         .into_iter()
                         .chain(once((
