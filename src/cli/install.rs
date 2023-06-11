@@ -290,11 +290,11 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
         })
         .change_context(Error::LoadManifestError)?;
 
-    // run the build script if it exists
-    if !plugin.build.is_empty() {
-        let mut split = plugin.build.split_whitespace().collect::<Vec<_>>();
+    let build_script_exists = !plugin.build.is_empty();
+    if build_script_exists {
+        let mut split = plugin.build.split_whitespace();
 
-        let command = Command::new(split.remove(0))
+        let command = Command::new(split.next().unwrap_or_default())
             .args(split)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
