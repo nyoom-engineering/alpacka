@@ -79,6 +79,9 @@ jobs:
         with:
           command: install
           args: cargo-zigbuild
+      - uses: maxim-lobanov/setup-xcode@v1 # required for compiling openssl-sys it seems
+        with:
+          xcode-version: latest-stable
       - name: build alpacka
         uses: actions-rs/cargo@v1
         with:
