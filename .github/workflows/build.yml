@@ -24,12 +24,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --profile optimized
       - name: upload alpacka binary
         uses: actions/upload-artifact@v2
         with:
           name: "alpacka-linux-x86_64"
-          path: "target/optimized/alpacka"
+          path: "target/release/alpacka"
           if-no-files-found: error
           retention-days: 7
 
@@ -50,12 +49,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --profile optimized
       - name: upload alpacka x86 mac binary
         uses: actions/upload-artifact@v2
         with:
           name: "alpacka-macos-x86_64"
-          path: "target/optimized/alpacka"
+          path: "target/release/alpacka"
           if-no-files-found: error
           retention-days: 7
 
@@ -77,11 +75,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --profile optimized --target aarch64-apple-darwin
+          args: --target aarch64-apple-darwin
       - name: upload alpacka aarch64 binary
         uses: actions/upload-artifact@v2
         with:
           name: "alpacka-macos-aarch64"
-          path: "target/aarch64-apple-darwin/optimized/alpacka"
+          path: "target/aarch64-apple-darwin/release/alpacka"
           if-no-files-found: error
           retention-days: 7
