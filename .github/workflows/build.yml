@@ -24,6 +24,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
+          args: --release
       - name: upload alpacka binary
         uses: actions/upload-artifact@v2
         with:
@@ -49,6 +50,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
+          args: --release
       - name: upload alpacka x86 mac binary
         uses: actions/upload-artifact@v2
         with:
@@ -75,7 +77,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target aarch64-apple-darwin
+          args: --release --target aarch64-apple-darwin
       - name: upload alpacka aarch64 binary
         uses: actions/upload-artifact@v2
         with:
