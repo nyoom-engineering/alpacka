@@ -4,6 +4,7 @@ use crate::{
     manifest::{
         add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Manifest, Plugin,
     },
+    package::{Config as PackageConfig, Package, WithSmith},
     smith::{enums::Loaders, Git},
 };
 use error_stack::{Context, IntoReport, Result, ResultExt};
@@ -169,35 +170,38 @@ fn create_manifest_from_config(
                     format!("Failed to find smith. Smith name: {}", package.smith)
                 })?;
 
+            let WithSmith {
+                smith: smith_to_use,
+                package,
+            } = package;
+
+            let Package {
+                name,
+                config_package,
+            } = package;
+
+            let PackageConfig {
+                optional,
+                build,
+                dependencies,
+                rename,
+                version: _,
+            } = config_package;
+
             let plugin = Plugin {
                 name: smith
-                    .get_package_name(&package.package.name)
+                    .get_package_name(name)
                     .ok_or(Error::LoadManifestError)
                     .into_report()
                     .attach_printable_lazy(|| {
-                        format!(
-                            "Failed to get package name. Package name: {}",
-                            package.package.name
-                        )
+                        format!("Failed to get package name. Package name: {}", package.name)
                     })?,
-                unresolved_name: package.package.name,
-                rename: package.package.config_package.rename.clone(),
-                optional: package.package.config_package.optional.unwrap_or(false),
-                dependencies: package
-                    .package
-                    .config_package
-                    .dependencies
-                    .clone()
-                    .keys()
-                    .cloned()
-                    .collect(),
-                build: package
-                    .package
-                    .config_package
-                    .build
-                    .clone()
-                    .unwrap_or_default(),
-                smith: package.smith.clone(),
+                unresolved_name: name.to_string(),
+                rename: rename.clone(),
+                optional: optional.unwrap_or(false),
+                dependencies: dependencies.keys().cloned().collect(),
+                build: build.clone().unwrap_or_default(),
+                smith: smith_to_use,
                 loader_data,
             };
 
