@@ -1,5 +1,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
+// multiple crate versions is allowed because of other crates not updating deps
+// used underscore binding is allowed because of macros
+#![allow(clippy::multiple_crate_versions, clippy::used_underscore_binding)]
 
 //! Alpacka: the next-generation package manager for neovim.
 //!
@@ -8,8 +10,10 @@
 //! It also exports functions to run the package manager, such as resolving and loading plugins.
 //!
 //! This is NOT meant to be used by end-users, but rather by other programs that want to use alpacka as a library, such as a user-facing GUI/neovim plugin.
-pub mod clap;
 pub mod config;
 pub mod manifest;
 pub mod package;
 pub mod smith;
+
+#[cfg(feature = "cli")]
+pub mod cli;

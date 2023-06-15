@@ -24,12 +24,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --profile optimized
+          args: --release
       - name: upload alpacka binary
         uses: actions/upload-artifact@v2
         with:
           name: "alpacka-linux-x86_64"
-          path: "target/optimized/alpacka"
+          path: "target/release/alpacka"
           if-no-files-found: error
           retention-days: 7
 
@@ -50,12 +50,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --profile optimized
+          args: --release
       - name: upload alpacka x86 mac binary
         uses: actions/upload-artifact@v2
         with:
           name: "alpacka-macos-x86_64"
-          path: "target/optimized/alpacka"
+          path: "target/release/alpacka"
           if-no-files-found: error
           retention-days: 7
 
@@ -65,6 +65,10 @@ jobs:
       - name: Install dependencies
         run: brew install openssl git
       - uses: actions/checkout@v2
+      - name: set SDKROOT
+        run: |
+          echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> $GITHUB_ENV
+      - uses: goto-bus-stop/setup-zig@v2
       - name: install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -73,15 +77,22 @@ jobs:
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v1
+      - name: install zigbuild
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-zigbuild
       - name: build alpacka
         uses: actions-rs/cargo@v1
         with:
-          command: build
-          args: --profile optimized --target aarch64-apple-darwin
+          command: zigbuild
+          args: --release --features vendor --target aarch64-apple-darwin
+        env:
+          SDKROOT: ${{ env.SDKROOT }}
       - name: upload alpacka aarch64 binary
         uses: actions/upload-artifact@v2
         with:
           name: "alpacka-macos-aarch64"
-          path: "target/aarch64-apple-darwin/optimized/alpacka"
+          path: "target/aarch64-apple-darwin/release/alpacka"
           if-no-files-found: error
           retention-days: 7

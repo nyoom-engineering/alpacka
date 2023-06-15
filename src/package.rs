@@ -1,6 +1,9 @@
 //! A module which contains structs and types for packages
 
-use crate::smith::{DynSmith, ResolveError, SerializeLoaderInput};
+use crate::smith::{
+    enums::{Inputs, Loaders},
+    ResolveError,
+};
 use error_stack::{IntoReport, Result, ResultExt};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -24,26 +27,28 @@ pub struct Config {
 
 #[derive(Debug, Clone)]
 /// A package declaration, as found in a config file plus some additional information
-pub struct Package {
+///
+/// The reason for using references is to avoid cloning the entire config when resolving a package
+pub struct Package<'a> {
     /// The name of the package
-    pub name: String,
+    pub name: &'a str,
     /// The package's config, as found in the config file
-    pub config_package: Config,
+    pub config_package: &'a Config,
 }
 
 #[derive(Debug, Clone)]
 /// A package declaration and a smith name used to handle said package
-pub struct WithSmith {
+pub struct WithSmith<'a> {
     /// The name of the smith used to handle this package
     pub smith: String,
     /// The package to be handled
-    pub package: Package,
+    pub package: Package<'a>,
 }
 
 /// A type alias for a package loader input and a package with a smith
-pub type WithLoaderInput = (Box<dyn SerializeLoaderInput>, WithSmith);
+pub type WithLoaderInput<'a> = (Inputs, WithSmith<'a>);
 
-impl WithSmith {
+impl<'a> WithSmith<'a> {
     /// Check if this package is optional
     #[must_use]
     pub fn is_optional(&self) -> bool {
@@ -55,10 +60,7 @@ impl WithSmith {
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
     #[tracing::instrument]
-    pub fn resolve(
-        &self,
-        smiths: &[Box<dyn DynSmith>],
-    ) -> Result<Box<dyn SerializeLoaderInput>, ResolveError> {
+    pub fn resolve(&self, smiths: &[Loaders]) -> Result<Inputs, ResolveError> {
         let smith = smiths
             .iter()
             .find(|smith| smith.name() == self.smith)
@@ -66,7 +68,7 @@ impl WithSmith {
             .into_report()
             .attach_printable_lazy(|| format!("Smith {} not found", self.smith))?;
 
-        smith.resolve_dyn(&self.package)
+        smith.resolve(&self.package)
     }
 
     /// Recursively resolve a package to a loader package, which has all the necessary information to load the package.
@@ -79,22 +81,22 @@ impl WithSmith {
     #[tracing::instrument]
     pub fn resolve_recurse(
         self,
-        smiths: &[Box<dyn DynSmith>],
+        smiths: &'a [Loaders],
     ) -> Result<Vec<WithLoaderInput>, ResolveError> {
         let mut deps = self
             .package
             .config_package
             .dependencies
             .par_iter()
-            .map(|dep| {
+            .map(|(name, config_package)| {
                 let pkg = Package {
-                    name: dep.0.clone(),
-                    config_package: dep.1.clone(),
+                    name,
+                    config_package,
                 };
 
                 let smith_to_use = smiths
                     .iter()
-                    .find(|s| s.get_package_name(&pkg.name).is_some())
+                    .find(|s| s.get_package_name(pkg.name).is_some())
                     .ok_or(ResolveError)
                     .into_report()
                     .attach_printable_lazy(|| {
@@ -123,7 +125,7 @@ impl WithSmith {
             })?;
 
         let loader_data = smith_to_use
-            .resolve_dyn(&self.package)
+            .resolve(&self.package)
             .attach_printable_lazy(|| {
                 format!(
                     "Failed to resolve package. Package name: {}",
@@ -148,8 +150,8 @@ mod tests {
         let with_smith = WithSmith {
             smith: "test".to_string(),
             package: Package {
-                name: "test".to_string(),
-                config_package: Config {
+                name: "test",
+                config_package: &Config {
                     optional: Some(true),
                     version: None,
                     rename: None,

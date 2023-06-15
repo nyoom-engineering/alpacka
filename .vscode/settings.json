@@ -7,5 +7,7 @@
     "nvim",
     "rkyv",
     "typetag"
-  ]
+  ],
+  "cSpell.enableFiletypes": ["nix"],
+  "cSpell.language": "en,en-GB,lorem"
 }
