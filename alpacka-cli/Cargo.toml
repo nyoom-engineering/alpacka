@@ -15,7 +15,8 @@ path = "src/main.rs"
 
 [dependencies]
 dirs-sys = "0.4.0"
-alpacka = { path = "../alpacka-lib" }
+openssl-probe = { version = "0.1.5", optional = true }
+alpacka = { path = "../" }
 
 tracing = { workspace = true }
 tracing-error = { workspace = true }
@@ -35,3 +36,6 @@ features = ["derive"]
 version = "0.3.17"
 optional = false
 features = ["env-filter"]
+
+[features]
+vendor = ["alpacka/vendor", "dep:openssl-probe"]
