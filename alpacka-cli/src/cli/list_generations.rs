@@ -9,10 +9,9 @@ use error_stack::{ensure, Context, IntoReport, Result, ResultExt};
 use rkyv::{Deserialize, Infallible};
 use tracing::{error, info};
 
-use crate::{
-    cli::get_generations_from_file,
-    manifest::{GenerationsFile, Json, JsonGenerationsFile, Manifest},
-};
+use alpacka::manifest::{GenerationsFile, Json, JsonGenerationsFile, Manifest};
+
+use crate::cli::get_generations_from_file;
 
 use super::clap::ListGenerationsFormatMethod;
 

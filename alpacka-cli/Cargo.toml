@@ -1,0 +1,37 @@
+[package]
+name = "alpacka-cli"
+description = "CLI for Alpacka"
+license = "MIT"
+repository = "https://github.com/nyoom-engineering/alpacka"
+readme = "README.md"
+keywords = ["alpacka", "cli", "neovim"]
+categories = ["command-line-utilities"]
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "alpacka"
+path = "src/main.rs"
+
+[dependencies]
+dirs-sys = "0.4.0"
+alpacka = { path = "../alpacka-lib" }
+
+tracing = { workspace = true }
+tracing-error = { workspace = true }
+error-stack = { workspace = true }
+rkyv = { workspace = true }
+bytecheck = { workspace = true }
+ptr_meta = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dependencies.clap]
+version = "4.1.4"
+features = ["derive"]
+
+[dependencies.tracing-subscriber]
+version = "0.3.17"
+optional = false
+features = ["env-filter"]

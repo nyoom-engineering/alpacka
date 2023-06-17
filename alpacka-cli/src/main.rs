@@ -1,6 +1,8 @@
 #![allow(clippy::multiple_crate_versions)]
 
-use alpacka::cli::{
+mod cli;
+
+use cli::{
     clap::{Cli, ListGenerationsFormatMethod},
     install::install,
     list_generations::list_generations,

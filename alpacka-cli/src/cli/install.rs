@@ -1,5 +1,4 @@
-use crate::{
-    cli::get_generations_from_file,
+use alpacka::{
     config::Config,
     manifest::{
         add_to_generations, get_latest, ArchivedGenerationsFile, GenerationsFile, Manifest, Plugin,
@@ -22,19 +21,19 @@ use std::{
 };
 use tracing::{debug, info, warn};
 
+use crate::cli::get_generations_from_file;
+
 #[derive(Debug)]
 pub enum Error {
-    LoadError,
-    GenerationFetchError,
-    LoadManifestError,
+    Load,
+    LoadManifest,
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::LoadError => "Failed to load alpacka",
-            Self::GenerationFetchError => "Failed to fetch generations",
-            Self::LoadManifestError => "Failed to load manifest",
+            Self::Load => "Failed to load alpacka",
+            Self::LoadManifest => "Failed to load manifest",
         })
     }
 }
@@ -56,7 +55,7 @@ pub fn install(config_path: PathBuf, data_path: &PathBuf) -> Result<(), Error> {
                     data_path.display()
                 )
             })
-            .change_context(Error::LoadError)?;
+            .change_context(Error::Load)?;
     }
 
     load_alpacka(data_path, config_path)?;
@@ -68,12 +67,12 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), Error> {
     let config_file = std::fs::File::open(config_path)
         .into_report()
         .attach_printable_lazy(|| "Failed to open config file".to_string())
-        .change_context(Error::LoadError)?;
+        .change_context(Error::Load)?;
 
     let config: Config = serde_json::from_reader(config_file)
         .into_report()
         .attach_printable_lazy(|| "Failed to parse config file".to_string())
-        .change_context(Error::LoadError)?;
+        .change_context(Error::Load)?;
 
     info!("Config loaded, checking for existing manifest");
 
@@ -95,10 +94,10 @@ fn load_alpacka(data_path: &Path, config_path: PathBuf) -> Result<(), Error> {
                     generation_path.display()
                 )
             })
-            .change_context(Error::LoadError)?;
+            .change_context(Error::Load)?;
 
         let generations = get_generations_from_file(&generations_file)
-            .map_err(|_| Error::LoadError)
+            .map_err(|_| Error::Load)
             .into_report()
             .attach_printable_lazy(|| {
                 format!(
@@ -143,14 +142,14 @@ fn create_manifest_from_config(
     let packages = config
         .create_package_list(smiths)
         .attach_printable_lazy(|| "Failed to create package list")
-        .change_context(Error::LoadManifestError)?;
+        .change_context(Error::LoadManifest)?;
 
     info!("packages created, resolving");
     let resolved_packages = packages
         .into_par_iter()
         .map(|package| package.resolve_recurse(smiths))
         .collect::<Result<Vec<_>, _>>()
-        .change_context(Error::LoadManifestError)
+        .change_context(Error::LoadManifest)
         .attach_printable_lazy(|| "Failed to resolve packages!")?
         .into_iter()
         .flatten()
@@ -164,7 +163,7 @@ fn create_manifest_from_config(
             let smith = smiths
                 .iter()
                 .find(|s| s.name() == package.smith)
-                .ok_or(Error::LoadManifestError)
+                .ok_or(Error::LoadManifest)
                 .into_report()
                 .attach_printable_lazy(|| {
                     format!("Failed to find smith. Smith name: {}", package.smith)
@@ -191,7 +190,7 @@ fn create_manifest_from_config(
             let plugin = Plugin {
                 name: smith
                     .get_package_name(name)
-                    .ok_or(Error::LoadManifestError)
+                    .ok_or(Error::LoadManifest)
                     .into_report()
                     .attach_printable_lazy(|| {
                         format!("Failed to get package name. Package name: {}", package.name)
@@ -239,12 +238,12 @@ fn create_manifest_from_config(
                 generations_path.display()
             )
         })
-        .change_context(Error::LoadError)?;
+        .change_context(Error::Load)?;
 
     let bytes = to_bytes::<_, 1024>(&new_generations_file)
         .into_report()
         .attach_printable_lazy(|| "Failed to serialize generations file")
-        .change_context(Error::LoadError)?;
+        .change_context(Error::Load)?;
 
     file.write_all(&bytes)
         .into_report()
@@ -254,7 +253,7 @@ fn create_manifest_from_config(
                 generations_path.display()
             )
         })
-        .change_context(Error::LoadError)?;
+        .change_context(Error::Load)?;
 
     info!("generations file saved, getting latest manifest");
 
@@ -262,10 +261,10 @@ fn create_manifest_from_config(
         .0
         .into_iter()
         .last()
-        .ok_or(Error::LoadError)
+        .ok_or(Error::Load)
         .into_report()
         .attach_printable_lazy(|| "Failed to get latest manifest")
-        .change_context(Error::LoadManifestError)?;
+        .change_context(Error::LoadManifest)?;
 
     Ok(manifest.1)
 }
@@ -275,7 +274,7 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
     let smith = smiths
         .iter()
         .find(|s| s.name() == plugin.smith)
-        .ok_or(Error::LoadManifestError)
+        .ok_or(Error::LoadManifest)
         .into_report()
         .attach_printable_lazy(|| format!("Failed to find smith. Smith name: {}", plugin.smith))?;
 
@@ -292,7 +291,7 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
                 package_path.display()
             )
         })
-        .change_context(Error::LoadManifestError)?;
+        .change_context(Error::LoadManifest)?;
 
     let build_script_exists = !plugin.build.is_empty();
     if build_script_exists {
@@ -300,7 +299,7 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
 
         let build_command = build_arguments
             .next()
-            .ok_or(Error::LoadManifestError)
+            .ok_or(Error::LoadManifest)
             .into_report()
             .attach_printable_lazy(|| {
                 format!(
@@ -309,7 +308,7 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
                     package_path.display()
                 )
             })
-            .change_context(Error::LoadManifestError)?;
+            .change_context(Error::LoadManifest)?;
 
         let command = Command::new(build_command)
             .args(build_arguments)
@@ -325,17 +324,11 @@ fn load_plugin(smiths: &[Loaders], plugin: &Plugin, data_path: &Path) -> Result<
                     package_path.display()
                 )
             })
-            .change_context(Error::LoadManifestError)?;
+            .change_context(Error::LoadManifest)?;
 
-        let stdout = command
-            .stdout
-            .ok_or(Error::LoadManifestError)
-            .into_report()?;
+        let stdout = command.stdout.ok_or(Error::LoadManifest).into_report()?;
 
-        let stderr = command
-            .stderr
-            .ok_or(Error::LoadManifestError)
-            .into_report()?;
+        let stderr = command.stderr.ok_or(Error::LoadManifest).into_report()?;
 
         let stdout = BufReader::new(stdout);
         let stderr = BufReader::new(stderr);
@@ -354,7 +347,7 @@ fn create_stdio_readers<'a>(
 ) -> Result<(), Error> {
     let stdout = threads.spawn(move || -> Result<(), Error> {
         for line in stdout.lines() {
-            let line = line.into_report().change_context(Error::LoadError)?;
+            let line = line.into_report().change_context(Error::Load)?;
             info!("STDOUT from build script of {}: {}", plugin_name, line);
         }
 
@@ -363,7 +356,7 @@ fn create_stdio_readers<'a>(
 
     let stderr = threads.spawn(move || -> Result<(), Error> {
         for line in stderr.lines() {
-            let line = line.into_report().change_context(Error::LoadError)?;
+            let line = line.into_report().change_context(Error::Load)?;
             warn!("STDERR from build script {}: {}", plugin_name, line);
         }
 
