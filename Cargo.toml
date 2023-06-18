@@ -1,56 +1,63 @@
+[workspace]
+members = [
+    "alpacka-cli"
+]
+
+[workspace.dependencies.tracing]
+version = "0.1"
+features = []
+optional = false
+
+
+[workspace.dependencies.error-stack]
+version = "0.3.1"
+features = ["spantrace"]
+
+[workspace.dependencies.rkyv]
+version = "0.7.41"
+features = ["validation", "strict"]
+
+[workspace.dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = false
+
+[workspace.dependencies]
+tracing-error = "0.2.0"
+rayon = "1.6.1"
+serde_json = "1.0.91"
+ptr_meta = "0.1.4"
+bytecheck = "0.6.11"
+
 [package]
 name = "alpacka"
 version = "0.1.0"
 description = "The next-generation package manager for neovim."
 repository = "https://github.com/nyoom-engineering/alpacka"
-readme = ".github/README.md"
+readme = "README.md"
 authors = ["Shaurya Singh <shaunsingh0207@gmail.com>", "Suyashtnt <suyashtnt@gmail.com>"]
 license = "MIT"
 keywords = ["vim", "neovim", "package", "plugin", "manager"]
-categories = ["command-line-utilities", "text-editors"]
+categories = ["text-editors"]
 edition = "2021"
 
 [dependencies]
-openssl-probe = { version = "0.1.5", optional = true }
-bytecheck = "0.6.11"
-dirs-sys = "0.4.0"
-error-stack = { version = "0.3.1", features = ["spantrace"] }
 git2 = { version = "0.17.2" }
-ptr_meta = "0.1.4"
-rayon = "1.6.1"
-rkyv = { version = "0.7.41", features = ["validation", "strict"] }
-serde_json = "1.0.91"
 tempfile = "3.3.0"
-clap = { version = "4.1.4", features = ["derive"], optional = true }
-tracing-error = "0.2.0"
+tracing = { workspace = true }
+error-stack = { workspace = true}
+rkyv = { workspace = true }
+bytecheck = { workspace = true }
+ptr_meta = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
-[dependencies.serde]
-version = "1.0"
-features = ["derive"]
-optional = false
-
-[dependencies.tracing]
-version = "0.1"
-features = []
-optional = false
-
-[dependencies.tracing-subscriber]
-version = "0.3.17"
-optional = false
-features = ["env-filter"]
-
-[[bin]]
-name = "alpacka"
-path = "src/main.rs"
-required-features = ["cli"]
+[features]
+vendor = ["git2/vendored-openssl", "git2/vendored-libgit2"]
 
 [profile.release]
 opt-level = 3
 strip = true
 lto = true
 codegen-units = 1
-
-[features]
-default = ["cli"]
-vendor = ["git2/vendored-openssl", "git2/vendored-libgit2", "dep:openssl-probe"]
-cli = ["clap"]

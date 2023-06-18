@@ -4,7 +4,7 @@ use rkyv::{
     validation::{validators::DefaultValidatorError, CheckArchiveError},
 };
 
-use crate::manifest::{ArchivedGenerationsFile, GenerationsFile};
+use alpacka::manifest::{ArchivedGenerationsFile, GenerationsFile};
 
 pub mod clap;
 pub mod install;
