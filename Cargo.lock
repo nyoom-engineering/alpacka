@@ -50,11 +50,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "alpacka-lua"
+name = "alpacka-nvim"
 version = "0.1.0"
 dependencies = [
+ "alpacka",
  "bytecheck",
  "error-stack",
+ "nvim-oxi",
+ "openssl-probe",
  "ptr_meta",
  "rayon",
  "rkyv",
@@ -539,6 +542,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "mini-internal"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "261391cc14a85f1f05253c3f7b6f75937280f4171d72b3acf6548bad73b99626"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
+
+[[package]]
+name = "miniserde"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f290fd592e7e59944141a818bcdf2823cd5996b1c3001e97f5c28b556305e31"
+dependencies = [
+ "itoa",
+ "mini-internal",
+ "ryu",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -556,6 +581,20 @@ checksum = "0fac9e2da13b5eb447a6ce3d392f23a29d8694bff781bf03a16cd9ac8697593b"
 dependencies = [
  "hermit-abi 0.2.6",
  "libc",
+]
+
+[[package]]
+name = "nvim-oxi"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d10f3bf0588ed64f764acdb0bef3883b87f1491ff24005a8887bd9fe9c829061"
+dependencies = [
+ "miniserde",
+ "oxi-api",
+ "oxi-luajit",
+ "oxi-macros",
+ "oxi-types",
+ "thiserror",
 ]
 
 [[package]]
@@ -603,6 +642,52 @@ name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
+
+[[package]]
+name = "oxi-api"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17baa7880f7e8e0b24e523c8278957f769682c1e059b99f875c3c20ff9ca23fb"
+dependencies = [
+ "oxi-luajit",
+ "oxi-types",
+ "serde",
+ "serde_repr",
+ "thiserror",
+]
+
+[[package]]
+name = "oxi-luajit"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d1c5f855fc99e1f9f287958d679fb636bf68a784255cbb0e403dbc01495393c"
+dependencies = [
+ "once_cell",
+ "thiserror",
+]
+
+[[package]]
+name = "oxi-macros"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fa77de5791207f41bab307dadb91e66a2bbbd19433e4243ef98c9d45e03a007"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
+
+[[package]]
+name = "oxi-types"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5f4061c29de229c3ece5e8d22cd29a3e28c64977acda5caeb72cfe8eeb04659"
+dependencies = [
+ "libc",
+ "oxi-luajit",
+ "serde",
+ "thiserror",
+]
 
 [[package]]
 name = "percent-encoding"
@@ -860,6 +945,17 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcec881020c684085e55a25f7fd888954d56609ef363479dc5a1305eb0d40cab"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
 ]
 
 [[package]]

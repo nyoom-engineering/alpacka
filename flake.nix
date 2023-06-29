@@ -1,6 +1,5 @@
 {
   description = "Alpacka: A generational package manager for neovim";
-  nixConfig.substituters = ["https://nyoom-engineering.cachix.org"];
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -133,6 +132,7 @@
             rustToolchain
             alejandra
             rnix-lsp
+	    marksman
             pkg-config
             openssl
             git

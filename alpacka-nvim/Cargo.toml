@@ -1,0 +1,24 @@
+[package]
+name = "alpacka-nvim"
+description = "Bindings to alpacka through lua/neovim"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nvim-oxi = { version = "0.3.0", features = ["test", "neovim-nightly"] }
+alpacka = { path = "../"}
+openssl-probe = { version = "0.1.5", optional = true }
+
+error-stack = { workspace = true }
+rkyv = { workspace = true }
+bytecheck = { workspace = true }
+ptr_meta = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+vendor = ["alpacka/vendor", "dep:openssl-probe"]
