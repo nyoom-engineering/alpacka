@@ -50,6 +50,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alpacka-lua"
+version = "0.1.0"
+dependencies = [
+ "bytecheck",
+ "error-stack",
+ "ptr_meta",
+ "rayon",
+ "rkyv",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "anstream"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

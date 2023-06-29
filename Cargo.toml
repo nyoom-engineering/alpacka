@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "alpacka-cli"
+    "alpacka-cli",
+    "alpacka-lua"
 ]
 
 [workspace.dependencies.tracing]
