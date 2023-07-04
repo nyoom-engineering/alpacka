@@ -1,9 +1,10 @@
-use nvim_oxi as oxi;
-use oxi::Dictionary;
-
+use mlua::prelude::*;
 mod functions;
 
-#[oxi::module]
-fn alpacka() -> oxi::Result<Dictionary> {
-    Ok(Dictionary::from_iter([("hello", functions::hello())]))
+#[mlua::lua_module]
+fn alpacka(lua: &Lua) -> LuaResult<LuaTable> {
+    let exports = lua.create_table()?;
+    exports.set("hello", lua.create_function(functions::hello)?)?;
+
+    Ok(exports)
 }

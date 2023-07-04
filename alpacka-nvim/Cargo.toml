@@ -8,7 +8,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-nvim-oxi = { version = "0.3.0", features = ["test", "neovim-nightly"] }
+mlua = { version = "0.8", features = ["luajit", "module"] }
 alpacka = { path = "../"}
 openssl-probe = { version = "0.1.5", optional = true }
 
@@ -21,4 +21,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
-vendor = ["alpacka/vendor", "dep:openssl-probe"]
+vendor = ["alpacka/vendor", "dep:openssl-probe", "mlua/vendored"]
