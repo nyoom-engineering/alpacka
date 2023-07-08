@@ -1,6 +1,6 @@
 use crate::{
     package::{Config as ConfigPackage, Package, WithSmith},
-    smith::enums::Loaders,
+    smith::enums::Loader,
 };
 use error_stack::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,7 @@ use std::{collections::BTreeMap, fmt::Display};
 #[derive(Debug, Deserialize, Serialize, Hash, PartialEq, Eq, PartialOrd, Ord)]
 /// The alpacka config format
 pub struct Config {
+    neovim_version: String,
     /// All the packages
     pub packages: BTreeMap<String, ConfigPackage>,
 }
@@ -40,7 +41,7 @@ impl Config {
     #[tracing::instrument]
     pub fn create_package_list(
         &self,
-        smiths: &[Loaders],
+        smiths: &[Loader],
     ) -> Result<Vec<WithSmith>, CreatePackageListError> {
         let mut packages = Vec::with_capacity(self.packages.len());
 

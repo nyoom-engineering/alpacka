@@ -50,7 +50,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "alpacka-nvim"
+name = "alpacka_core"
 version = "0.1.0"
 dependencies = [
  "alpacka",
@@ -298,6 +298,15 @@ name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+
+[[package]]
+name = "erased-serde"
+version = "0.3.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2b0c2380453a92ea8b6c8e5f64ecaafccddde8ceab55ff7a8ac1029f894569"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "errno"
@@ -582,6 +591,7 @@ checksum = "07366ed2cd22a3b000aed076e2b68896fb46f06f1f5786c5962da73c0af01577"
 dependencies = [
  "bstr",
  "cc",
+ "erased-serde",
  "lua-src",
  "luajit-src",
  "mlua_derive",
@@ -589,6 +599,7 @@ dependencies = [
  "once_cell",
  "pkg-config",
  "rustc-hash",
+ "serde",
 ]
 
 [[package]]

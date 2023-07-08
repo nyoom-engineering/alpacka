@@ -1,14 +1,22 @@
 [package]
-name = "alpacka-nvim"
+# Name needs to be same as neovim name for ease of moving
+name = "alpacka_core"
 description = "Bindings to alpacka through lua/neovim"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/nyoom-engineering/alpacka"
+readme = "README.md"
+authors = ["Shaurya Singh <shaunsingh0207@gmail.com>", "Suyashtnt <suyashtnt@gmail.com>"]
+license = "MIT"
+keywords = ["vim", "neovim", "package", "plugin", "manager"]
+categories = ["text-editors"]
+
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-mlua = { version = "0.8", features = ["luajit", "module"] }
+mlua = { version = "0.8", features = ["luajit", "module", "serialize"] }
 alpacka = { path = "../"}
 openssl-probe = { version = "0.1.5", optional = true }
 

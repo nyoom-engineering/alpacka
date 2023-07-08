@@ -7,11 +7,11 @@ use rkyv::{Archive, Deserialize, Serialize};
 use super::{git::Input, Git, LoadError, ResolveError, Smith};
 
 #[derive(Debug)]
-pub enum Loaders {
+pub enum Loader {
     Git(Git),
 }
 
-impl Loaders {
+impl Loader {
     #[must_use]
     pub fn name(&self) -> String {
         match self {

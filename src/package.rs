@@ -1,7 +1,7 @@
 //! A module which contains structs and types for packages
 
 use crate::smith::{
-    enums::{Inputs, Loaders},
+    enums::{Inputs, Loader},
     ResolveError,
 };
 use error_stack::{IntoReport, Result, ResultExt};
@@ -60,7 +60,7 @@ impl<'a> WithSmith<'a> {
     /// # Errors
     /// This function will return an error if the package cannot be resolved.
     #[tracing::instrument]
-    pub fn resolve(&self, smiths: &[Loaders]) -> Result<Inputs, ResolveError> {
+    pub fn resolve(&self, smiths: &[Loader]) -> Result<Inputs, ResolveError> {
         let smith = smiths
             .iter()
             .find(|smith| smith.name() == self.smith)
@@ -81,7 +81,7 @@ impl<'a> WithSmith<'a> {
     #[tracing::instrument]
     pub fn resolve_recurse(
         self,
-        smiths: &'a [Loaders],
+        smiths: &'a [Loader],
     ) -> Result<Vec<WithLoaderInput>, ResolveError> {
         let mut deps = self
             .package

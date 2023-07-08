@@ -131,8 +131,8 @@
           [
             rustToolchain
             alejandra
-            rnix-lsp
-	    marksman
+            nil
+            marksman
             pkg-config
             openssl
             git

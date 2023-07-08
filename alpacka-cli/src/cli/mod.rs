@@ -10,7 +10,7 @@ pub mod clap;
 pub mod install;
 pub mod list_generations;
 
-pub(crate) fn get_generations_from_file(
+pub fn get_generations_from_file(
     generations_file: &[u8],
 ) -> Result<&ArchivedGenerationsFile, CheckArchiveError<TupleStructCheckError, DefaultValidatorError>>
 {
